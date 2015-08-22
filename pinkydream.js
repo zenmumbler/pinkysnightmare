@@ -1,3 +1,4 @@
+(function(){
 // Pinky's Nightmare
 // An entry for LD33 Game Jampo — You are the Monster
 // (c) 2015 by Arthur Langereis — @zenmumbler
@@ -59,6 +60,7 @@ function TriMesh(vertexArray, normalArray, colorArray) {
 		gl.drawArrays(gl.TRIANGLES, 0, this.elements);
 	};
 }
+window.TriMesh = TriMesh;
 
 
 function SimpleModel(mesh) {
@@ -77,7 +79,12 @@ function SimpleModel(mesh) {
 		mat4.translate(this.modelMatrix, this.modelMatrix, v3);
 	};
 }
+window.SimpleModel = SimpleModel;
 
+
+function deg2rad(deg) {
+	return deg * 3.14159265358979323846 / 180.0;
+}
 
 function Camera(canvas) {
 	var w = canvas.width;
@@ -85,8 +92,7 @@ function Camera(canvas) {
 	gl.viewport(0, 0, w, h);
 
 	this.projectionMatrix = mat4.create();
-	mat4.perspective(this.projectionMatrix, 65, w / h, 0.05, 100.0);
-	
+	mat4.perspective(this.projectionMatrix, deg2rad(65), w / h, 0.05, 100.0);
 	this.cameraMatrix = mat4.create();
 	this.viewMatrix = mat4.create();
 
@@ -118,8 +124,16 @@ function Camera(canvas) {
 */
 
 
-var mapModel;
-var shaderProgram;
+var state = {
+	keys: [],
+	models: {},
+	modelProgram: null
+};
+var active = true;
+
+var KEY_UP = 38, KEY_DOWN = 40, KEY_LEFT = 37, KEY_RIGHT = 39,
+	KEY_SPACE = 32, KEY_RETURN = 13;
+
 
 
 function getShader(id) {
@@ -148,32 +162,31 @@ function getShader(id) {
 
 
 
-function initShaders() {
-	var fragmentShader = getShader("shader-fs");
-	var vertexShader = getShader("shader-vs");
+function createStandardProgram(vertID, fragID) {
+	var program = gl.createProgram();
+	gl.attachShader(program, getShader(vertID));
+	gl.attachShader(program, getShader(fragID));
+	gl.linkProgram(program);
 
-	shaderProgram = gl.createProgram();
-	gl.attachShader(shaderProgram, vertexShader);
-	gl.attachShader(shaderProgram, fragmentShader);
-	gl.linkProgram(shaderProgram);
-
-	if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
+	if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
 		alert("Could not initialise shaders");
 	}
 
-	gl.useProgram(shaderProgram);
+	gl.useProgram(program);
 
-	shaderProgram.vertexPositionAttribute = gl.getAttribLocation(shaderProgram, "vertexPos_model");
-	gl.enableVertexAttribArray(shaderProgram.vertexPositionAttribute);
+	program.vertexPositionAttribute = gl.getAttribLocation(program, "vertexPos_model");
+	gl.enableVertexAttribArray(program.vertexPositionAttribute);
 
-	shaderProgram.vertexColorAttribute = gl.getAttribLocation(shaderProgram, "vertexColor");
-	gl.enableVertexAttribArray(shaderProgram.vertexColorAttribute);
+	program.vertexColorAttribute = gl.getAttribLocation(program, "vertexColor");
+	gl.enableVertexAttribArray(program.vertexColorAttribute);
 
-// 	shaderProgram.vertexNormalAttribute = gl.getAttribLocation(shaderProgram, "vertexNormal");
-// 	gl.enableVertexAttribArray(shaderProgram.vertexNormalAttribute);
+// 	program.vertexNormalAttribute = gl.getAttribLocation(program, "vertexNormal");
+// 	gl.enableVertexAttribArray(program.vertexNormalAttribute);
 
-	shaderProgram.projMatrixUniform = gl.getUniformLocation(shaderProgram, "projectionMatrix");
-	shaderProgram.mvMatrixUniform = gl.getUniformLocation(shaderProgram, "modelViewMatrix");
+	program.projMatrixUniform = gl.getUniformLocation(program, "projectionMatrix");
+	program.mvMatrixUniform = gl.getUniformLocation(program, "modelViewMatrix");
+	
+	return program;
 }
 
 
@@ -182,9 +195,9 @@ function drawScene(camera) {
 	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
 	camera.updateViewMatrix();
-	gl.uniformMatrix4fv(shaderProgram.projMatrixUniform, false, camera.projectionMatrix);
+	gl.uniformMatrix4fv(state.modelProgram.projMatrixUniform, false, camera.projectionMatrix);
 
-	mapModel.draw(camera, shaderProgram);
+	state.mapModel.draw(camera, state.modelProgram);
 }
 
 
@@ -212,16 +225,44 @@ function setupGL(then) {
 
 function main() {
 	setupGL(function(camera) {
-		initShaders();
+		state.modelProgram = createStandardProgram("standardVert", "standardFrag");
 
 		function nextFrame() {
+			if (state.keys[KEY_UP]) {
+				camera.translate([0, 0, -1.0/9]);
+			}
+			if (state.keys[KEY_DOWN]) {
+				camera.translate([0, 0, 1.0/9]);
+			}
+			if (state.keys[KEY_LEFT]) {
+				camera.translate([-1.0/9, 0, 0]);
+			}
+			if (state.keys[KEY_RIGHT]) {
+				camera.translate([1.0/9, 0, 0]);
+			}
+
 			drawScene(camera);
-	// 		requestAnimationFrame(nextFrame);
+
+			if (active)
+		 		requestAnimationFrame(nextFrame);
 		}
+
+		window.onkeydown = function(evt) {
+			var kc = evt.keyCode;
+			state.keys[kc] = true;
+// 			evt.preventDefault();
+		};
+		window.onkeyup = function(evt) {
+			var kc = evt.keyCode;
+			state.keys[kc] = false;
+// 			evt.preventDefault();
+		};
+		window.onblur = function() { active = false };
+		window.onfocus = function() { state.t0 = Date.now(); active = true; nextFrame(); };
 		
 		genMapMesh(function(mapMesh) {
-			mapModel = new SimpleModel(mapMesh);
-			camera.translate([27, 3, 25]);
+			state.mapModel = new SimpleModel(mapMesh);
+			camera.translate([54, 2, 50]);
 			nextFrame();
 		});
 	});
@@ -234,3 +275,4 @@ function main() {
 
 
 on(window, "load", main);
+}());

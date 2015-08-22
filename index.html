@@ -17,7 +17,7 @@
 <script src="pinkydream.js"></script>
 
 
-<script id="shader-vs" type="x-shader/x-vertex">
+<script id="standardVert" type="x-shader/x-vertex">
     attribute vec3 vertexPos_model;
     attribute vec3 vertexColor;
     attribute vec3 vertexNormal;
@@ -38,7 +38,7 @@
     }
 </script>
 
-<script id="shader-fs" type="x-shader/x-fragment">
+<script id="standardFrag" type="x-shader/x-fragment">
     precision mediump float;
 
 	varying vec3 vertexPos_cam_intp;
@@ -47,8 +47,8 @@
     void main(void) {
     	vec3 fogColor = vec3(0.1, 0.0, 0.05);
     	
-		const float fogDistance = 3.0;
-		float fogDensity = clamp((length(vertexPos_cam_intp) - fogDistance) / 8.0, 0.0, 1.0);
+		const float fogDistance = 8.0;
+		float fogDensity = clamp((length(vertexPos_cam_intp) - fogDistance) / 16.0, 0.0, 0.95);
 		vec3 outColor = vec3(mix(vertexColor_intp, fogColor, fogDensity));
 
         gl_FragColor = vec4(outColor, 1.0);

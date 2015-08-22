@@ -1,9 +1,9 @@
 function buildMapFromImageData(pix) {
-	var inuse = 0, w = pix.width, h = pix.height;
+	var inuse = 0, pixw = pix.width, pixh = pix.height;
 	var data = pix.data, offset = 0;
 	
-	var SCALE = 2;
-	var HEIGHT = 30;       // will appear inf high 
+	var SCALE = 4.0;
+	var HEIGHT = 20.0;       // will appear inf high 
 	
 	var vertexes = [], normals = [], colors = [];
 	function vtx(x, y, z) { vertexes.push(x, y, z); }
@@ -14,16 +14,16 @@ function buildMapFromImageData(pix) {
 		south = [0, 0, 1],
 		east  = [1, 0, 0];
 
-	for (var z=0; z < h; ++z) {
-		for (var x=0; x < w; ++x) {
-			if (data[offset + 3] > 0) {
+	for (var z=0; z < pixh; ++z) {
+		for (var x=0; x < pixw; ++x) {
+			if (data[offset] == 0) {
 				++inuse;
 				
 				var xa = x * SCALE,
 					xb = (x+1) * SCALE,
 					za = z * SCALE;
 					zb = (z+1) * SCALE,
-					h = HEIGHT * SCALE;
+					h = HEIGHT;
 				
 				// ccw
 				// wall top
