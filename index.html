@@ -8,10 +8,52 @@
 	</style>
 </head>
 <body>
-	<div style="width: 960px; margin: 150px auto 50px auto;">
-		<canvas width="960" height="540" id="stage"></canvas>
-	</div>
-	
-	<script src="pinkydream.js"></script>
+<div style="width: 960px; margin: 150px auto 50px auto;">
+	<canvas width="960" height="540" id="stage"></canvas>
+</div>
+
+<script src="gl-matrix.js"></script>
+<script src="levelgen.js"></script>
+<script src="pinkydream.js"></script>
+
+
+<script id="shader-vs" type="x-shader/x-vertex">
+    attribute vec3 vertexPos_model;
+    attribute vec3 vertexColor;
+    attribute vec3 vertexNormal;
+
+    uniform mat4 modelViewMatrix;
+    uniform mat4 projectionMatrix;
+//    uniform mat4 normalMatrix;
+    
+	varying vec3 vertexPos_cam_intp;
+	varying vec3 vertexColor_intp;
+//	varying vec3 vertexNormal_intp;
+
+    void main(void) {
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(vertexPos_model, 1.0);
+		vertexPos_cam_intp = (modelViewMatrix * vec4(vertexPos_model, 1.0)).xyz;
+		vertexColor_intp = vertexColor;
+//		vertexNormal_intp = normalize(normalMatrix * vertexNormal);
+    }
+</script>
+
+<script id="shader-fs" type="x-shader/x-fragment">
+    precision mediump float;
+
+	varying vec3 vertexPos_cam_intp;
+	varying vec3 vertexColor_intp;
+
+    void main(void) {
+    	vec3 fogColor = vec3(0.1, 0.0, 0.05);
+    	
+		const float fogDistance = 3.0;
+		float fogDensity = clamp((length(vertexPos_cam_intp) - fogDistance) / 8.0, 0.0, 1.0);
+		vec3 outColor = vec3(mix(vertexColor_intp, fogColor, fogDensity));
+
+        gl_FragColor = vec4(outColor, 1.0);
+    }
+</script>
+
 </body>
 </html>
