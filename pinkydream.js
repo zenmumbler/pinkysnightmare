@@ -118,7 +118,7 @@ function Camera(canvas) {
 */
 
 
-var triangleModel, squareModel, mapModel;
+var mapModel;
 var shaderProgram;
 
 
@@ -178,65 +178,12 @@ function initShaders() {
 
 
 
-function initBuffers() {
-	var vertices = [
-		 0.0,  1.0,  0.0,
-		-1.0, -1.0,  0.0,
-		 1.0, -1.0,  0.0
-	];
-	var normals = [
-		0.0,  0.0,  1.0,
-		0.0,  0.0,  1.0,
-		0.0,  0.0,  1.0
-	];
-	var colors = [
-		 0.0,  1.0,  0.0,
-		 0.0,  1.0,  0.0,
-		 0.0,  1.0,  0.0,
-	];
-	var triangleMesh = new TriMesh(vertices, normals, colors);
-	triangleModel = new SimpleModel(triangleMesh);
-	triangleModel.translate([-1.5, 0.0, -7.0]);
-
-	vertices = [
-		 1.0,  1.0,  0.0,
-		-1.0,  1.0,  0.0,
-		 1.0, -1.0,  0.0,
-
-		 1.0, -1.0,  0.0,
-		-1.0,  1.0,  0.0,
-		-1.0, -1.0,  0.0
-	];
-	normals = [
-		0.0,  0.0,  1.0,
-		0.0,  0.0,  1.0,
-		0.0,  0.0,  1.0,
-		0.0,  0.0,  1.0,
-		0.0,  0.0,  1.0,
-		0.0,  0.0,  1.0
-	];
-	colors = [
-		 1.0,  1.0,  1.0,
-		 1.0,  1.0,  1.0,
-		 1.0,  1.0,  1.0,
-		 1.0,  1.0,  1.0,
-		 1.0,  1.0,  1.0,
-		 1.0,  1.0,  1.0
-	];
-	var squareMesh = new TriMesh(vertices, normals, colors);
-	squareModel = new SimpleModel(squareMesh);
-	squareModel.translate([1.5, 0.0, -7.0]);
-}
-
-
 function drawScene(camera) {
 	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
 	camera.updateViewMatrix();
 	gl.uniformMatrix4fv(shaderProgram.projMatrixUniform, false, camera.projectionMatrix);
 
-	triangleModel.draw(camera, shaderProgram);
-	squareModel.draw(camera, shaderProgram);
 	mapModel.draw(camera, shaderProgram);
 }
 
@@ -266,7 +213,6 @@ function setupGL(then) {
 function main() {
 	setupGL(function(camera) {
 		initShaders();
-		initBuffers();
 
 		function nextFrame() {
 			drawScene(camera);
@@ -275,7 +221,7 @@ function main() {
 		
 		genMapMesh(function(mapMesh) {
 			mapModel = new SimpleModel(mapMesh);
-			camera.translate([27, 2, 25]);
+			camera.translate([27, 3, 25]);
 			nextFrame();
 		});
 	});
