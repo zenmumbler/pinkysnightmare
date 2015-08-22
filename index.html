@@ -4,12 +4,38 @@
 	<meta charsett="utf-8">
 	<title>Pinky's Nightmare</title>
 	<style>
-		body { margin: 0; background: black; }
+		body {
+			margin: 0; background: black;
+			font-family: Baskerville, serif;
+		}
+		h3 { font-weight: 300; color: #444; }
+		h3, p { padding: 0; margin: 0 0 .4em 0; }
+		p { color: #333; }
+		button {
+			color: #444;
+			border: 1px solid #666;
+			padding: 8px 32px;
+			border-radius: 4px;
+			background: black;
+			font-size: 15px;
+			cursor: pointer;
+		}
+		.meta {
+			margin-top: 3em;
+			text-align: center;
+		}
 	</style>
 </head>
 <body>
 <div style="width: 960px; margin: 150px auto 50px auto;">
 	<canvas width="960" height="540" id="stage"></canvas>
+</div>
+
+<div class="meta">
+	<h3>Pinky's Nightmare</h3>
+	<p>&copy; 2015 by Arthur Langereis &mdash; Pac-Man&reg;, Pinky&reg; and the Pac-Man&reg; field and all related visuals are &copy; Bandai-Namco Entertaiment</p>
+	<p>This game is <b>NOT</b> afffiliated with or endorsed by Bandai-Namco Entertainment. Pinky's Nightmare uses similar concepts under Fair Use law.</p>
+	<p><button>Fullscreen</button></p>
 </div>
 
 <script src="gl-matrix.js"></script>

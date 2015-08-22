@@ -260,6 +260,10 @@ function main() {
 		window.onblur = function() { active = false };
 		window.onfocus = function() { state.t0 = Date.now(); active = true; nextFrame(); };
 		
+		on("button", "click", function() {
+			$1("canvas").webkitRequestFullscreen();
+		});
+		
 		genMapMesh(function(mapMesh) {
 			state.mapModel = new SimpleModel(mapMesh);
 			camera.translate([54, 2, 50]);
