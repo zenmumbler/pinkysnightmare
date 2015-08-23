@@ -38,7 +38,7 @@
 	<p><button>Fullscreen</button></p>
 	<p>&nbsp;</p>
 	<p>&copy; 2015 by Arthur Langereis &mdash; Pac-Man&reg;, Pinky&reg; and the Pac-Man&reg; field and all related visuals are &copy; Bandai-Namco Entertaiment</p>
-	<p>This game is <b>NOT</b> afffiliated with or endorsed by Bandai-Namco Entertainment.</p>
+	<p>This game is <b>NOT</b> affiliated with or endorsed by Bandai-Namco Entertainment.</p>
 	<p>&nbsp;</p>
 	<p class="attrib">Texture on the Pac-Abomination is AsphaltDamaged0081 from <a href="http://www.cgtextures.com/texview.php?id=108630">CGTextures</a></p>
 	<p class="attrib">Key model by `senjen` from <a href="http://www.models-resource.com/pc_computer/zelda2fps/model/5369/">The Models Resource</a></p>
@@ -93,6 +93,8 @@ function assert(cond, msg) {
 	varying vec3 vertexPos_cam_intp;
 	varying vec3 vertexColor_intp;
 
+	uniform float currentTime;
+
 	void main(void) {
 		vec3 fogColor = vec3(0.1, 0.0, 0.05);
 		
@@ -137,6 +139,7 @@ function assert(cond, msg) {
 	varying vec2 vertexUV_intp;
 	
 	uniform sampler2D diffuseSampler;
+	uniform float currentTime;
 
 	void main(void) {
 		vec4 fogColor = vec4(0.1, 0.0, 0.05, 1.0);

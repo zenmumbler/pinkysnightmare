@@ -30,8 +30,8 @@ var state = {
 var active = true;
 
 var KEY_UP = 38, KEY_DOWN = 40, KEY_LEFT = 37, KEY_RIGHT = 39,
-	KEY_SPACE = 32, KEY_RETURN = 13;
-
+	KEY_SPACE = 32, KEY_RETURN = 13,
+	KEY_W = 'W'.charCodeAt(0), KEY_A = 'A'.charCodeAt(0), KEY_S = 'S'.charCodeAt(0), KEY_D = 'D'.charCodeAt(0);
 
 function TriMesh(vertexArray, normalArray, colorArray, uvArray) {
 	assert(vertexArray && vertexArray.length && (vertexArray.length % 9 == 0), "vertex array must be a triangle soup"); // 3 vtx * 3 floats
@@ -126,11 +126,13 @@ function Model(/* mesh0, mesh1, ... */) {
 	var modelMatrix = mat4.create();
 	var modelViewMatrix = mat4.create();
 	var normalMatrix = mat3.create();
-
+	
 	this.draw = function(camera, program, meshIndex) {
 		mat4.multiply(modelMatrix, transMat, rotMat);
 		mat4.multiply(modelMatrix, modelMatrix, scaleMat);
-
+		
+		this.debugModelMatrix = mat4.clone(modelMatrix);
+		
 		mat4.multiply(modelViewMatrix, camera.viewMatrix, modelMatrix);
 		gl.uniformMatrix4fv(program.mvMatrixUniform, false, modelViewMatrix);
 
@@ -148,9 +150,12 @@ function Model(/* mesh0, mesh1, ... */) {
 		mat4.fromScaling(scaleMat, [s, s, s]);
 	};
 	
-	this.move = function(v3) {
-		assert(v3.length == 3);
-		mat4.translate(transMat, transMat, v3);
+	this.setPosition = function(v3) {
+		mat4.fromTranslation(transMat, v3);
+	};
+
+	this.setRotation = function(axis, angle) {
+		mat4.fromRotation(rotMat, angle, axis);
 	};
 }
 
@@ -181,9 +186,150 @@ function Camera(canvas) {
 }
 
 
+function Square(x, y) {
+	var min = vec2.fromValues(x,y),
+		max = vec2.fromValues(x+1, y+1);
+	this.center = vec2.fromValues(x+.5, y+.5);
+	
+	this.closestPoint = function(pt2) {
+		var closest = vec2.create();
+		vec2.max(closest, min, pt2);
+		vec2.min(closest, max, closest);
+		return closest;
+	};
+
+	this.distanceToPoint = function(pt2) {
+		return vec2.distance(this.closestPoint(pt2), pt2);
+	};	
+}
+
+
+function Grid(width, height, cells) {
+	var squares = [], sqix = 0;
+	for (var z=0; z<height; ++z) {
+		for (var x=0; x<width; ++x) {
+			if (cells[sqix])
+				squares[sqix] = new Square(x, z);
+			else
+				squares[sqix] = null;
+
+			++sqix;
+		}
+	}
+	
+	function at(x, z) {
+		return squares[(z>>0) * width + (x>>0)];
+	}
+
+	this.collideAndResolveCircle = function(posFrom, posTo, radius) /* -> vec2 */ {
+		var direction = vec2.create();
+		vec2.subtract(direction, posTo, posFrom);
+		
+		var toCheck = [];
+		var minX = (posTo[0] - radius)<<0, maxX = (posTo[0] + radius)<<0;
+		var minZ = (posTo[1] - radius)<<0, maxZ = (posTo[0] + radius)<<0;
+
+		for (var tz = minZ; tz <= maxZ; ++tz) {
+			for (var tx = minX; tx <= maxX; ++tx) {
+				var sq = at(tx, tz);
+				if (sq) toCheck.push(sq);
+			}
+		}
+		
+		if (! toCheck.length)
+			return posTo;
+
+		var closestSquare = null, closestDist = 99999;
+		toCheck.forEach(function(sq) {
+			var dist = sq.distanceToPoint(posTo);
+			if (dist < closestDist) {
+				closestDist = dist;
+				closestSquare = sq;
+			}
+		});
+		
+		if (closestSquare && closestDist < radius) {
+			var pushback = vec2.create();
+			vec2.normalize(pushback, direction);
+			vec2.scale(pushback, pushback, radius - closestDist);
+			vec2.subtract(posTo, posTo, pushback);
+			
+			
+		}
+
+		return posTo;
+	};
+}
+
+
 function Player(model) {
 	this.model = model;
-// 	this.
+	this.position = vec3.fromValues(0, 0.3, 0); // grid units
+	this.viewAngle = Math.PI / 2; // radians
+	this.turnSpeed = Math.PI; // radians / sec
+	this.speed = 1; // grid units / sec
+	this.radius = .25; // grid units
+	
+	this.model.setUniformScale(1);
+	
+	var scaledPos = vec3.create();
+	var rotAxis = vec3.fromValues(0, 1, 0);
+	
+	this.moveTo2D = function(x, z) {
+		vec3.set(this.position, x, this.position[1], z);
+	};
+	
+	var moveMat = mat2.create();
+	var movePos = vec2.create();
+	
+	this.update = function(dt) {
+		// -- rotation
+		var turnAngle = 0;
+		if (state.keys[KEY_LEFT]) {
+			turnAngle = -this.turnSpeed;
+		}
+		else if (state.keys[KEY_RIGHT]) {
+			turnAngle = this.turnSpeed;
+		}
+		this.viewAngle += turnAngle * dt;
+
+		// -- movement
+		var speed = 0;
+		if (state.keys[KEY_UP]) {
+			speed = -this.speed;
+		}
+		else if (state.keys[KEY_DOWN]) {
+			speed = this.speed;
+		}
+		
+		if (speed != 0) {
+			mat2.fromRotation(moveMat, this.viewAngle);
+			mat2.scale(moveMat, moveMat, [speed * dt, speed * dt]);
+			vec2.set(movePos, 1, 0);
+			vec2.transformMat2(movePos, movePos, moveMat);
+
+			var oldPos = vec2.fromValues(this.position[0], this.position[2]);
+			var newPos = vec2.create();
+			vec2.add(newPos, oldPos, movePos);
+			
+			newPos = state.grid.collideAndResolveCircle(oldPos, newPos, this.radius);
+
+			this.position[0] = newPos[0];
+			this.position[2] = newPos[1];
+
+
+			// -- collision
+			
+		}
+		
+	};
+
+	this.draw = function() {
+		vec3.scale(scaledPos, this.position, LEVEL_SCALE);
+		this.model.setPosition(scaledPos);
+		this.model.setRotation(rotAxis, -this.viewAngle);
+		model.draw(state.camera, state.modelProgram, 0);
+	};
 }
 
 
@@ -194,11 +340,17 @@ function drawScene(camera) {
 	
 	gl.useProgram(state.modelProgram);
 	gl.uniformMatrix4fv(state.modelProgram.projMatrixUniform, false, camera.projectionMatrix);
+	if (state.modelProgram.timeUniform)
+		gl.uniform1f(state.modelProgram.timeUniform, state.tCur - state.t0);
+
 	state.models["map"].draw(camera, state.modelProgram, 0);
-	state.models["pinky"].draw(camera, state.modelProgram, 0);
+	state.player.draw();
 
 	gl.useProgram(state.texturedProgram);
 	gl.uniformMatrix4fv(state.texturedProgram.projMatrixUniform, false, camera.projectionMatrix);
+	if (state.texturedProgram.timeUniform)
+		gl.uniform1f(state.texturedProgram.timeUniform, state.tCur - state.t0);
+
 	state.models["pac"].draw(camera, state.texturedProgram, 1);
 
 }
@@ -268,6 +420,7 @@ function createStandardProgram(vertID, fragID) {
 	program.mvMatrixUniform = gl.getUniformLocation(program, "modelViewMatrix");
 	program.normalMatrixUniform = gl.getUniformLocation(program, "normalMatrix");
 	program.textureUniform = gl.getUniformLocation(program, "diffuseSampler");
+	program.timeUniform = gl.getUniformLocation(program, "currentTime");
 	
 	gl.useProgram(null);
 	
@@ -298,21 +451,25 @@ function setupGL(then) {
 
 
 function nextFrame() {
+	state.tCur = Date.now();
+	var dt = 1/60;
+
 	var camera = state.camera;
 
-	if (state.keys[KEY_UP]) {
+	if (state.keys[KEY_W]) {
 		camera.translate([0, 0, -1.0/6]);
 	}
-	if (state.keys[KEY_DOWN]) {
+	if (state.keys[KEY_S]) {
 		camera.translate([0, 0, 1.0/6]);
 	}
-	if (state.keys[KEY_LEFT]) {
+	if (state.keys[KEY_A]) {
 		camera.translate([-1.0/6, 0, 0]);
 	}
-	if (state.keys[KEY_RIGHT]) {
+	if (state.keys[KEY_D]) {
 		camera.translate([1.0/6, 0, 0]);
 	}
 
+	state.player.update(dt);
 	drawScene(camera);
 
 	if (active)
@@ -356,9 +513,9 @@ function init() {
 			state.meshes["map"] = mapData.mesh;
 			state.models["map"] = new Model(mapData.mesh);
 			state.camera.fixedPoints = mapData.cameras;
-			state.grid = mapData.grid;
+			state.grid = new Grid(mapData.gridW, mapData.gridH, mapData.grid);
 		
-			var pacColor = u8Color(213,215,17);
+			var pacColor = u8Color(213, 215, 17);
 
 			// Promises are for wimps
 			createStandardTexture("crackpac.png", function(pacTex) {
@@ -372,7 +529,7 @@ function init() {
 					
 						var pac = new Model(state.meshes["pac1"], state.meshes["pac2"]);
 						pac.setUniformScale(5);
-						pac.move([54, 0.1, 36]);
+						pac.setPosition([54, 0.1, 36]);
 						pac.texture = pacTex;
 						state.models["pac"] = pac;
 
@@ -385,10 +542,10 @@ function init() {
 								state.meshes["spookje"] = new TriMesh(spookjeData.vertexes, spookjeData.normals, spookjeColors, null);
 							
 								state.models["pinky"] = new Model(state.meshes["spookje"]);
-								state.models["pinky"].move([54, 1, 50]);
 								state.player = new Player(state.models["pinky"]);
+								state.player.moveTo2D(13.5, 11);
 
-								run();							
+								run();
 							});
 						});
 					});
