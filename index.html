@@ -99,7 +99,7 @@ function assert(cond, msg) {
 		vec3 fogColor = vec3(0.1, 0.0, 0.05);
 		
 		const float fogDistance = 8.0;
-		float fogDensity = clamp((length(vertexPos_cam_intp) - fogDistance) / 16.0, 0.0, 0.95);
+		float fogDensity = clamp((length(vertexPos_cam_intp) - fogDistance) / 32.0, 0.0, 0.95);
 		vec3 outColor = vec3(mix(vertexColor_intp, fogColor, fogDensity));
 
 		gl_FragColor = vec4(outColor, 1.0);
@@ -145,7 +145,7 @@ function assert(cond, msg) {
 		vec4 fogColor = vec4(0.1, 0.0, 0.05, 1.0);
 		
 		const float fogDistance = 8.0;
-		float fogDensity = clamp((length(vertexPos_cam_intp) - fogDistance) / 16.0, 0.0, 0.95);
+		float fogDensity = clamp((length(vertexPos_cam_intp) - fogDistance) / 32.0, 0.0, 0.95);
 		vec4 texColor = texture2D(diffuseSampler, vertexUV_intp);
 		vec4 outColor = mix(vec4(vertexColor_intp, 1.0), texColor, 0.5);
 

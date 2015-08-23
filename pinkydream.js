@@ -164,13 +164,28 @@ function Camera(canvas) {
 	this.cameraMatrix = mat4.create();
 	this.viewMatrix = mat4.create();
 
-	this.translate = function(v3) {
-		assert(v3.length == 3);
-		mat4.translate(this.cameraMatrix, this.cameraMatrix, v3);
-	};
-
 	this.updateViewMatrix = function() {
-		mat4.invert(this.viewMatrix, this.cameraMatrix);
+// 		mat4.copy(this.viewMatrix, this.cameraMatrix);
+// 		mat4.invert(this.viewMatrix, this.cameraMatrix);
+	};
+	
+	this.pickClosestVantagePoint = function() {
+		var playerPos = vec2.fromValues(state.player.position[0], state.player.position[2]);
+		
+		this.fixedPoints.sort(function(fpa, fpb) {
+			var distA = vec2.squaredDistance(fpa, playerPos);
+			var distB = vec2.squaredDistance(fpb, playerPos);
+			return (distA < distB) ? -1 : ((distB < distA) ? 1 : 0);
+		});
+		
+		var bestCam = this.fixedPoints[0];
+		var camPos = vec3.fromValues(bestCam[0], 5, bestCam[1]);
+		vec3.scale(camPos, camPos, LEVEL_SCALE);
+
+		var playerPos = vec3.clone(state.player.position);
+		vec3.scale(playerPos, playerPos, LEVEL_SCALE);
+
+ 		mat4.lookAt(this.viewMatrix, camPos, playerPos, [0,1,0]);
 	};
 }
 
@@ -471,19 +486,7 @@ function nextFrame() {
 
 	var camera = state.camera;
 
-	if (state.keys[KEY_W]) {
-		camera.translate([0, 0, -1.0/6]);
-	}
-	if (state.keys[KEY_S]) {
-		camera.translate([0, 0, 1.0/6]);
-	}
-	if (state.keys[KEY_A]) {
-		camera.translate([-1.0/6, 0, 0]);
-	}
-	if (state.keys[KEY_D]) {
-		camera.translate([1.0/6, 0, 0]);
-	}
-
+	camera.pickClosestVantagePoint();
 	state.player.update(dt);
 	drawScene(camera);
 
@@ -494,7 +497,6 @@ function nextFrame() {
 
 function run() {
 	state.t0 = Date.now();
- 	state.camera.translate([54, 5, 50]);
 	nextFrame();
 }
 
