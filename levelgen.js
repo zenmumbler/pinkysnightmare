@@ -21,14 +21,14 @@ function buildMapFromImageData(pix) {
 
 	for (var z=0; z < pixh; ++z) {
 		for (var x=0; x < pixw; ++x) {
+			grid[gridOffset] = false;
+
 			if (data[offset] == 0) {
 				var xa = x * LEVEL_SCALE,
 					xb = (x+1) * LEVEL_SCALE,
 					za = z * LEVEL_SCALE,
 					zb = (z+1) * LEVEL_SCALE,
 					h = HEIGHT;
-				
-				grid[gridOffset] = false;
 				
 				if (data[offset+1] > 200) {
 					cameras.push(vec2.fromValues(x + .5, z + .5));

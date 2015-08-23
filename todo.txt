@@ -1,0 +1,30 @@
+TODO
+————
+- wall collisions
+- camera tracking
+
+- colour code maze
+- floor texture?
+
+- pac AI
+
+- fix fullscreen
+
+- pac sounds
+- death sound
+- key sound
+
+- title screen
+- finish screen
+
+
+
+DONE
+————
+- pac models and texture
+- key model
+
+- obj loader
+- texture shader
+
+- movement
