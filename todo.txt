@@ -1,6 +1,5 @@
 TODO
 ————
-- wall collisions
 - camera tracking
 
 - colour code maze
@@ -28,3 +27,4 @@ DONE
 - texture shader
 
 - movement
+- wall collisions
