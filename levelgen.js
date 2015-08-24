@@ -61,22 +61,24 @@ function buildMapFromImageData(pix) {
 			grid[gridOffset] = false;
 			path[gridOffset] = false;
 			
-			if (x == 17 && z == 12) {
-				console.info(data[offset], data[offset+1], data[offset+2], data[offset+3]);
+			if ((data[offset+0] != 0 && data[offset+0] != 255) ||
+				(data[offset+1] != 0 && data[offset+1] != 255) ||
+				(data[offset+2] != 0 && data[offset+2] != 255)) {
+				console.info(x, z, data[offset], data[offset+1], data[offset+2], data[offset+3]);
 			}
 
-			if (data[offset] < 4) {
+			if (data[offset] == 0) {
 				var xa = x * LEVEL_SCALE,
 					xb = (x+1) * LEVEL_SCALE,
 					za = z * LEVEL_SCALE,
 					zb = (z+1) * LEVEL_SCALE,
 					h = HEIGHT;
 				
-				if (data[offset+2] > 200) {
+				if (data[offset+2] == 255) {
 					path[gridOffset] = true;
 				}
 				
-				if (data[offset+1] > 200) {
+				if (data[offset+1] == 255) {
 					if (vec2.equals([x,z], doorCameraLoc)) {
 						var dc = vec2.fromValues(x + .5, z + .1);
 						dc.doorCam = true;
@@ -86,7 +88,8 @@ function buildMapFromImageData(pix) {
 						cameras.push(vec2.fromValues(x + .5, z + .5));
 					}
 				}
-				else {
+
+				if ((data[offset+1] == 0) && (data[offset+2] == 0)) {
 					++inuse;
 					grid[gridOffset] = true;
 					
@@ -195,7 +198,7 @@ function buildMapFromImageData(pix) {
 
 function genMapMesh(then) {	
 	var img = new Image();
-	img.src = "level.png";
+	img.src = "levelx.png";
 	img.onload = function() {
 		var t0 = performance.now();
 		var cvs = document.createElement("canvas");
@@ -203,6 +206,11 @@ function genMapMesh(then) {
 		cvs.height = img.height;
 
 		var ctx = cvs.getContext("2d");
+		ctx.webkitImageSmoothingEnabled = false; // NO
+		ctx.mozImageSmoothingEnabled = false;
+		ctx.msImageSmoothingEnabled = false;
+		ctx.imageSmoothingEnabled = false;
+
 		ctx.drawImage(img, 0, 0);
 		var pix = ctx.getImageData(0, 0, cvs.width, cvs.height);
 		var map = buildMapFromImageData(pix);
