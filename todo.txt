@@ -1,8 +1,6 @@
 TODO
 ————
 
-- collide keys
-
 - place door
 - collide door (hack via grid)
 
@@ -42,3 +40,4 @@ DONE
 - reject wall looking cameras
 
 - place keys
+- collide keys

@@ -398,7 +398,7 @@ function Key(index) {
 	this.index = index;
 	this.found = false;
 	this.position = vec3.create();
-	this.radius = 0.25;
+	this.radius = 0.5;
 	
 	this.model.setUniformScale(1);
 	
@@ -419,13 +419,28 @@ function Key(index) {
 	];
 
 	vec3.copy(this.position, keyPositions[this.index]);
+	vec3.scale(scaledPos, this.position, LEVEL_SCALE);
+	this.model.setPosition(scaledPos);
 
 	this.update = function(dt) {
+		if (this.found)
+			return;
+
+		var playerPos = vec2.fromValues(state.player.position[0], state.player.position[2]);
+		var myPos = vec2.fromValues(this.position[0], this.position[2]);
+		
+		var maxRadius = Math.max(this.radius, state.player.radius);
+		if (vec2.distance(playerPos, myPos) < maxRadius) {
+			this.found = true;
+
+			vec3.copy(this.position, keyPositionsFound[this.index]);
+			vec3.scale(scaledPos, this.position, LEVEL_SCALE);
+			this.model.setPosition(scaledPos);
+			this.model.setRotation(rotAxis, 0);
+		}
 	};
-	
+
 	this.draw = function() {
-		vec3.scale(scaledPos, this.position, LEVEL_SCALE);
-		this.model.setPosition(scaledPos);
 		if (! this.found)
 	 		this.model.setRotation(rotAxis, state.tCur * 1.3);
 		this.model.draw(state.camera, state.modelProgram, 0);
