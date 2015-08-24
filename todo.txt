@@ -1,9 +1,9 @@
 TODO
 ————
 
-- place keys
-- place door
 - collide keys
+
+- place door
 - collide door (hack via grid)
 
 - pac paths in level image
@@ -12,6 +12,7 @@ TODO
 - pac sounds
 - death sound
 - key sound
+- bg sound
 
 - title screen
 - finish screen
@@ -39,3 +40,5 @@ DONE
 - wrap tunnel
 - fixed door cam
 - reject wall looking cameras
+
+- place keys

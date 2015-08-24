@@ -396,21 +396,38 @@ function Grid(width, height, cells) {
 function Key(index) {
 	this.model = new Model(state.meshes["key"]);
 	this.index = index;
+	this.found = false;
 	this.position = vec3.create();
+	this.radius = 0.25;
 	
 	this.model.setUniformScale(1);
 	
 	var scaledPos = vec3.create();
-	var rotAxis = vec3.fromValues(0, 1, 0);	
+	var rotAxis = vec3.fromValues(0, 1, 0);
+	
+	var keyPositions = [
+		[4.5, .2, 8.5],
+		[52.5, .2, 8.5],
+		[4.5, .2, 48.5],
+		[52.5, .2, 48.5]
+	];
+	var keyPositionsFound = [
+		[29, 3.0, 27],
+		[28, 3.0, 27],
+		[29, 1.5, 27],
+		[28, 1.5, 27]
+	];
+
+	vec3.copy(this.position, keyPositions[this.index]);
 
 	this.update = function(dt) {
-		vec3.set(this.position, 28.5, 0.2, 27.5);
 	};
 	
 	this.draw = function() {
 		vec3.scale(scaledPos, this.position, LEVEL_SCALE);
 		this.model.setPosition(scaledPos);
- 		this.model.setRotation(rotAxis, state.tCur);
+		if (! this.found)
+	 		this.model.setRotation(rotAxis, state.tCur * 1.3);
 		this.model.draw(state.camera, state.modelProgram, 0);
 	};
 }
