@@ -65,7 +65,7 @@ function buildMapFromImageData(pix) {
 				console.info(data[offset], data[offset+1], data[offset+2], data[offset+3]);
 			}
 
-			if (data[offset] < 16) {
+			if (data[offset] < 4) {
 				var xa = x * LEVEL_SCALE,
 					xb = (x+1) * LEVEL_SCALE,
 					za = z * LEVEL_SCALE,

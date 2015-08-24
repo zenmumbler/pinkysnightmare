@@ -284,11 +284,17 @@ function Grid(width, height, cells, pathCells) {
 		}
 	}
 	
+	this.path = pathCells;
+	
 	this.width = width;
 	this.height = height;
 
 	function at(x, z) {
 		return squares[(z>>0) * width + (x>>0)];
+	}
+	
+	function pathAt(x, z) {
+		return pathCells[(z>>0) * width + (x>>0)];
 	}
 
 	this.set = function(x, z, occupied) {
@@ -635,7 +641,7 @@ function Player() {
 function Abomination() {
 	this.model = new Model(state.meshes["pac1"], state.meshes["pac2"]);
 	this.model.texture = state.textures["crackpac"];
-	this.position = vec3.create();
+	this.position = vec3.fromValues();
 
 	this.model.setUniformScale(5);
 
