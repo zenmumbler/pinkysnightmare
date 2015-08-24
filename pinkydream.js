@@ -7,7 +7,10 @@ var gl;
 var state = {
 	keys: [],
 	meshes: {},
-	models: {}
+	models: {},
+	keyItems: [],
+	pacs: [],
+	entities: []
 };
 
 var active = true;
@@ -15,11 +18,6 @@ var active = true;
 var KEY_UP = 38, KEY_DOWN = 40, KEY_LEFT = 37, KEY_RIGHT = 39,
 	KEY_SPACE = 32, KEY_RETURN = 13,
 	KEY_W = 'W'.charCodeAt(0), KEY_A = 'A'.charCodeAt(0), KEY_S = 'S'.charCodeAt(0), KEY_D = 'D'.charCodeAt(0);
-
-
-vec2.equals = function(a, b) {
-	return a[0] == b[0] && a[1] == b[1];
-};
 
 
 function TriMesh(vertexArray, normalArray, colorArray, uvArray) {
@@ -161,28 +159,61 @@ function Camera(canvas) {
 
 	this.projectionMatrix = mat4.create();
 	mat4.perspective(this.projectionMatrix, deg2rad(65), w / h, 0.05, 100.0);
-	this.cameraMatrix = mat4.create();
 	this.viewMatrix = mat4.create();
 
-	this.updateViewMatrix = function() {
-// 		mat4.copy(this.viewMatrix, this.cameraMatrix);
-// 		mat4.invert(this.viewMatrix, this.cameraMatrix);
-	};
-	
 	this.pickClosestVantagePoint = function() {
 		var playerPos = vec2.fromValues(state.player.position[0], state.player.position[2]);
-		
+
+		// order viewpoints by distance to player
 		this.fixedPoints.sort(function(fpa, fpb) {
 			var distA = vec2.squaredDistance(fpa, playerPos);
 			var distB = vec2.squaredDistance(fpb, playerPos);
 			return (distA < distB) ? -1 : ((distB < distA) ? 1 : 0);
 		});
-		
-		var bestCam = this.fixedPoints[0];
-		var camPos = vec3.fromValues(bestCam[0], 5, bestCam[1]);
+
+		var bestCam = null;
+		var minViewDistSq = 3.05 * 3.05;
+		var temp = vec2.create(), f2p = vec2.create();
+
+		for (var cx=0; cx < this.fixedPoints.length; ++cx) {
+			// from this viewpoint, cast a ray to the player and find the first map wall we hit
+			var camFP = this.fixedPoints[cx];
+			vec2.subtract(temp, playerPos, camFP);
+			vec2.copy(f2p, temp);
+			var sq = state.grid.castRay(camFP, temp);
+
+			// calc distances from cam to wall and player
+			var camToSquareDistSq = vec2.squaredDistance(camFP, sq.center);
+			var camToPlayerDistSq = vec2.length(f2p);
+			camToPlayerDistSq = camToPlayerDistSq * camToPlayerDistSq;
+
+			// if we have a minimum view distance or the player is closer to the cam than the wall then it wins
+			if (camToSquareDistSq >= minViewDistSq || camToSquareDistSq > camToPlayerDistSq) {
+				bestCam = camFP;
+				break;
+			}
+// 			else {
+// 				console.info("rejecting", vec2.str(camFP), "because", vec2.str(sq.center), "blocks view to", vec2.str(playerPos), camToSquareDistSq, camToPlayerDistSq);
+// 			}
+		}
+		if (! bestCam) {
+			console.info("CAM FIND FAIL");
+			bestCam = this.fixedPoints[0];
+		}
+
+		// place eye at worldspace of cam and treat the viewpoint looking at the home door as a fixed camera
+		var doorCameraLoc = [28,23];
+		var camY = bestCam.doorCam ? 6 : 5;
+		var camPos = vec3.fromValues(bestCam[0], camY, bestCam[1]);
 		vec3.scale(camPos, camPos, LEVEL_SCALE);
 
 		var playerPos = vec3.clone(state.player.position);
+		if (bestCam.doorCam) {
+			vec3.set(playerPos, 28.5, 0, 27); // fixed view of the home base
+		}
+		else {
+			playerPos[1] = 0.3; // player height oscillates but we don't want a wobbly camera
+		}
 		vec3.scale(playerPos, playerPos, LEVEL_SCALE);
 
  		mat4.lookAt(this.viewMatrix, camPos, playerPos, [0,1,0]);
@@ -252,10 +283,76 @@ function Grid(width, height, cells) {
 			++sqix;
 		}
 	}
+	
+	this.width = width;
+	this.height = height;
 
 	function at(x, z) {
 		return squares[(z>>0) * width + (x>>0)];
 	}
+	
+	
+	this.castRay = function(from, direction) /* -> Square? */ {
+		// adapted from sample code at: http://lodev.org/cgtutor/raycasting.html
+		vec2.normalize(direction, direction);
+
+		//calculate ray position and direction 
+		var rayPosX = from[0];
+		var rayPosY = from[1];
+		var rayDirX = direction[0];
+		var rayDirY = direction[1];
+		//which box of the map we're in  
+		var mapX = rayPosX << 0;
+		var mapY = rayPosY << 0;
+
+		//length of ray from current position to next x or y-side
+		var sideDistX, sideDistY;
+
+		//length of ray from one x or y-side to next x or y-side
+		var deltaDistX = Math.sqrt(1 + (rayDirY * rayDirY) / (rayDirX * rayDirX));
+		var deltaDistY = Math.sqrt(1 + (rayDirX * rayDirX) / (rayDirY * rayDirY));
+		var perpWallDist;
+
+		//what direction to step in x or y-direction (either +1 or -1)
+		var stepX, stepY;
+
+		var tests = 0; // limit search depth
+		//calculate step and initial sideDist
+		if (rayDirX < 0) {
+			stepX = -1;
+			sideDistX = (rayPosX - mapX) * deltaDistX;
+		}
+		else {
+			stepX = 1;
+			sideDistX = (mapX + 1.0 - rayPosX) * deltaDistX;
+		}
+		if (rayDirY < 0) {
+			stepY = -1;
+			sideDistY = (rayPosY - mapY) * deltaDistY;
+		}
+		else {
+			stepY = 1;
+			sideDistY = (mapY + 1.0 - rayPosY) * deltaDistY;
+		}
+
+		while (++tests < 200) {
+			//jump to next map square, OR in x-direction, OR in y-direction
+			if (sideDistX < sideDistY) {
+				sideDistX += deltaDistX;
+				mapX += stepX;
+			}
+			else {
+				sideDistY += deltaDistY;
+				mapY += stepY;
+			}
+
+			var sq = at(mapX, mapY);
+			if (sq) return sq;
+		} 
+
+		return null;
+	};
+
 
 	this.collideAndResolveCircle = function(posFrom, posTo, radius) /* -> vec2 */ {
 		var direction = vec2.create();
@@ -296,10 +393,33 @@ function Grid(width, height, cells) {
 }
 
 
-function Player(model) {
-	this.model = model;
+function Key(index) {
+	this.model = new Model(state.meshes["key"]);
+	this.index = index;
+	this.position = vec3.create();
+	
+	this.model.setUniformScale(1);
+	
+	var scaledPos = vec3.create();
+	var rotAxis = vec3.fromValues(0, 1, 0);	
+
+	this.update = function(dt) {
+		vec3.set(this.position, 28.5, 0.2, 27.5);
+	};
+	
+	this.draw = function() {
+		vec3.scale(scaledPos, this.position, LEVEL_SCALE);
+		this.model.setPosition(scaledPos);
+ 		this.model.setRotation(rotAxis, state.tCur);
+		this.model.draw(state.camera, state.modelProgram, 0);
+	};
+}
+
+
+function Player() {
+	this.model = new Model(state.meshes["spookje"]);
 	this.position = vec3.fromValues(0, 0.3, 0); // grid units
-	this.viewAngle = Math.PI / 2; // radians
+	this.viewAngle = Math.PI / -2; // radians
 	this.turnSpeed = Math.PI; // radians / sec
 	this.speed = 1.75; // grid units / sec
 	this.radius = .25; // grid units
@@ -347,18 +467,26 @@ function Player(model) {
 			vec2.add(newPos, oldPos, movePos);
 
 			newPos = state.grid.collideAndResolveCircle(oldPos, newPos, this.radius);
+			
+			// warp tunnel
+			if (newPos[0] < 0)
+				newPos[0] += state.grid.width;
+			if (newPos[0] >= state.grid.width)
+				newPos[0] -= state.grid.width;
 
 			this.position[0] = newPos[0];
 			this.position[2] = newPos[1];
 		}
 
+		// hover up and down
+		this.position[1] = 0.35 + 0.05 * Math.sin(state.tCur * 3);
 	};
 
 	this.draw = function() {
 		vec3.scale(scaledPos, this.position, LEVEL_SCALE);
 		this.model.setPosition(scaledPos);
 		this.model.setRotation(rotAxis, -this.viewAngle);
-		model.draw(state.camera, state.modelProgram, 0);
+		this.model.draw(state.camera, state.modelProgram, 0);
 	};
 }
 
@@ -366,20 +494,19 @@ function Player(model) {
 function drawScene(camera) {
 	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-	camera.updateViewMatrix();
-
 	gl.useProgram(state.modelProgram);
 	gl.uniformMatrix4fv(state.modelProgram.projMatrixUniform, false, camera.projectionMatrix);
 	if (state.modelProgram.timeUniform)
-		gl.uniform1f(state.modelProgram.timeUniform, state.tCur - state.t0);
+		gl.uniform1f(state.modelProgram.timeUniform, state.tCur);
 
 	state.models["map"].draw(camera, state.modelProgram, 0);
 	state.player.draw();
+	state.keyItems.forEach(function(key) { key.draw(); });
 
 	gl.useProgram(state.texturedProgram);
 	gl.uniformMatrix4fv(state.texturedProgram.projMatrixUniform, false, camera.projectionMatrix);
 	if (state.texturedProgram.timeUniform)
-		gl.uniform1f(state.texturedProgram.timeUniform, state.tCur - state.t0);
+		gl.uniform1f(state.texturedProgram.timeUniform, state.tCur);
 
 	state.models["pac"].draw(camera, state.texturedProgram, 1);
 
@@ -481,14 +608,19 @@ function setupGL(then) {
 
 
 function nextFrame() {
-	state.tCur = Date.now();
-	var dt = 1/60;
-
+	state.tCur = (Date.now() / 1000.0) - state.t0;
+	var dt = state.tCur - state.tLast;
 	var camera = state.camera;
 
+	// -- update
 	camera.pickClosestVantagePoint();
 	state.player.update(dt);
+	state.keyItems.forEach(function(key) { key.update(dt); });
+
+	// -- render
 	drawScene(camera);
+
+	state.tLast = state.tCur;
 
 	if (active)
 		requestAnimationFrame(nextFrame);
@@ -496,7 +628,18 @@ function nextFrame() {
 
 
 function run() {
-	state.t0 = Date.now();
+	state.t0 = Date.now() / 1000.0;
+	state.tCur = 0;
+	state.tLast = 0;
+
+	state.player = new Player();
+	state.player.moveTo2D(28.5, 25);
+	
+	state.keyItems.push(new Key(0));
+	state.keyItems.push(new Key(1));
+	state.keyItems.push(new Key(2));
+	state.keyItems.push(new Key(3));
+
 	nextFrame();
 }
 
@@ -520,7 +663,11 @@ function init() {
 // 				evt.preventDefault();
 		};
 		window.onblur = function() { active = false; };
-		window.onfocus = function() { state.t0 = Date.now(); active = true; nextFrame(); };
+		window.onfocus = function() {
+			state.tLast = (Date.now() / 1000.0) - state.t0;
+			active = true;
+			nextFrame();
+		};
 
 		on("button", "click", function() {
 			$1("canvas").webkitRequestFullscreen();
@@ -557,10 +704,6 @@ function init() {
 							loadObjFile("spookje.obj", function(spookjeData) {
 								var spookjeColors = genColorArray(u8Color(255,184,221), spookjeData.elements);
 								state.meshes["spookje"] = new TriMesh(spookjeData.vertexes, spookjeData.normals, spookjeColors, null);
-
-								state.models["pinky"] = new Model(state.meshes["spookje"]);
-								state.player = new Player(state.models["pinky"]);
-								state.player.moveTo2D(13.5, 11);
 
 								run();
 							});

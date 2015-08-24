@@ -1,12 +1,13 @@
 TODO
 ————
-- colour code maze
-- floor texture?
-- wrap tunnel
 
-- pac AI
+- place keys
+- place door
+- collide keys
+- collide door (hack via grid)
 
-- fix fullscreen
+- pac paths in level image
+- pac path tracing
 
 - pac sounds
 - death sound
@@ -14,6 +15,9 @@ TODO
 
 - title screen
 - finish screen
+
+- floor texture?
+- fix fullscreen
 
 
 
@@ -29,3 +33,9 @@ DONE
 - wall collisions
 
 - camera tracking
+- fix dt calc
+- colour code maze
+
+- wrap tunnel
+- fixed door cam
+- reject wall looking cameras
