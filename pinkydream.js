@@ -172,7 +172,7 @@ function Camera(canvas) {
 		});
 
 		var bestCam = null;
-		var minViewDistSq = 3.05 * 3.05;
+		var minViewDistSq = 3.5 * 3.5;
 		var temp = vec2.create(), f2p = vec2.create();
 
 		for (var cx=0; cx < this.fixedPoints.length; ++cx) {
@@ -197,7 +197,7 @@ function Camera(canvas) {
 // 			}
 		}
 		if (! bestCam) {
-			console.info("CAM FIND FAIL");
+// 			console.info("CAM FIND FAIL");
 			bestCam = this.fixedPoints[0];
 		}
 
@@ -284,6 +284,7 @@ function Grid(width, height, cells, pathCells) {
 		}
 	}
 	
+	this.cells = cells;
 	this.path = pathCells;
 	
 	this.width = width;
@@ -296,6 +297,25 @@ function Grid(width, height, cells, pathCells) {
 	function pathAt(x, z) {
 		return pathCells[(z>>0) * width + (x>>0)];
 	}
+	
+	this.pathExits = function(curPos, curDir) {
+		var x = curPos[0], z = curPos[1], exits = [];
+		assert(pathAt(x, z), "you're not on a path!");
+
+		if ((curDir != "south") && pathAt(x, z-1))
+			exits.push({ pos: [x, z-1], dir: "north" });
+
+		if ((curDir != "east") && pathAt(x-1, z))
+			exits.push({ pos: [x-1, z], dir: "west" });
+
+		if ((curDir != "north") && pathAt(x, z+1))
+			exits.push({ pos: [x, z+1], dir: "south" });
+
+		if ((curDir != "west") && pathAt(x+1, z))
+			exits.push({ pos: [x+1, z], dir: "east" });
+		
+		return exits;
+	};
 
 	this.set = function(x, z, occupied) {
 		var sq = occupied ? new Square(x, z) : null;
@@ -638,18 +658,74 @@ function Player() {
 }
 
 
-function Abomination() {
+function Abomination(index) {
 	this.model = new Model(state.meshes["pac1"], state.meshes["pac2"]);
 	this.model.texture = state.textures["crackpac"];
-	this.position = vec3.fromValues();
 
 	this.model.setUniformScale(5);
+	this.phase = "move";
+	
+	this.spawnData = [
+// 		{ direction: "north", pathPos: [43, 18]	}
+		{ direction: "north", pathPos: [31, 24]	}
+	];
+	
+	this.direction = this.spawnData[index].direction;
+	this.pathPos = vec2.clone(this.spawnData[index].pathPos);
+	this.pathStep = 0;
+	this.lastStepT = 0;
+	this.stepDuration = 0.5;
+	this.turnDuration = 1;
+	
+	this.rotations = {
+		north: Math.PI,
+		west: Math.PI / -2,
+		south: 0,
+		east: Math.PI / 2
+	};
+	this.directionVecs = {
+		north: [0,-1],
+		west: [-1,0],
+		south: [0,1],
+		east: [1,0]
+	};
+	var rotAxis = vec3.fromValues(0,1,0);
+	
+	var scaledPos = vec3.create();
+	var moveOffset = vec3.create();
 
 	this.update = function(dt) {
+		if (this.phase == "move") {
+			if (state.tCur - this.lastStepT > this.stepDuration) {
+				this.pathStep++;
+				this.lastStepT = state.tCur;
+				var dirVec2 = this.directionVecs[this.direction];
+				var dirVec3 = vec3.fromValues(dirVec2[0], 0, dirVec2[1]);
+
+				vec3.scale(moveOffset, dirVec3, this.pathStep / 2);
+				vec3.set(scaledPos, this.pathPos[0] + 0.5, 0, this.pathPos[1] + 0.5);
+				vec3.add(scaledPos, scaledPos, moveOffset);
+
+				vec3.scale(scaledPos, scaledPos, LEVEL_SCALE);
+				this.model.setPosition(scaledPos);
+				this.model.setRotation(rotAxis, this.rotations[this.direction]);
+				
+				// moved 1 full tile
+				if (this.pathStep == 2) {
+					vec2.add(this.pathPos, this.pathPos, dirVec2);
+					this.pathStep = 0;
+					var exits = state.grid.pathExits(this.pathPos, this.direction);
+					this.direction = exits[0].dir;
+				}
+			}
+		} // move
+		else if (this.phase == "turn") {
+			
+		}
 	};
 
 	this.draw = function() {
-		this.model.draw(state.camera, state.texturedProgram, 1);
+		this.model.draw(state.camera, state.texturedProgram, this.pathStep & 1);
 	};
 }
 
@@ -809,7 +885,7 @@ function run() {
 	
 	state.door = new Door();
 	
-	state.pacs.push(new Abomination());
+	state.pacs.push(new Abomination(0));
 
 	nextFrame();
 }
