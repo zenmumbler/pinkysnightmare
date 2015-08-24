@@ -3,21 +3,58 @@
 
 var LEVEL_SCALE = 4.0;
 
+vec2.equals = function(a, b) {
+	return a[0] == b[0] && a[1] == b[1];
+};
 
 function buildMapFromImageData(pix) {
 	var inuse = 0, pixw = pix.width, pixh = pix.height;
 	var data = pix.data, offset = 0, gridOffset = 0;
 	
-	var HEIGHT = 30.0;       // will appear inf high 
+	var HEIGHT = 25.0;       // will appear inf high 
 	
 	var vertexes = [], normals = [], colors = [], cameras = [], grid = [];
+
 	function vtx(x, y, z) { vertexes.push(x, y, z); }
-	function nrm6(n) { for(var n=0; n<6; ++n) normals.push(n[0], n[1], n[2]); }
+	function nrm6(nrm) { for(var n=0; n<6; ++n) normals.push(nrm[0], nrm[1], nrm[2]); }
+	function col6(colT, colB) {
+		colors.push(colT[0], colT[1], colT[2]);
+		colors.push(colB[0], colB[1], colB[2]);
+		colors.push(colB[0], colB[1], colB[2]);
+
+		colors.push(colB[0], colB[1], colB[2]);
+		colors.push(colT[0], colT[1], colT[2]);
+		colors.push(colT[0], colT[1], colT[2]);
+	}
 	
-	var north = [0, 0, -1],
+	var north = [0, 0, -1],        // normals of the sides
 		west  = [-1, 0, 0],
 		south = [0, 0, 1],
 		east  = [1, 0, 0];
+	
+	var corners = [
+		[0, 0],
+		[pixw, 0],
+		[0, pixh],
+		[pixw, pixh]
+	];
+
+	var cornerColors = [
+		u8Color(32, 43, 222),      // topleft
+		u8Color(0, 252, 222),      // topright
+		u8Color(255, 184, 71),     // botleft
+		u8Color(255, 37, 0),       // botright
+
+		u8Color(0xff, 0xd7, 0x00)  // homebase
+	];
+	
+	var topDarkenFactor = 0.5,
+		botDarkenFactor = 0.32;        // bottom vertices are darker than top ones
+	
+	// home base in the grid
+	var homeBaseMin = [21,26],
+		homeBaseMax = [35,34];
+	var	doorCameraLoc = [28,23];
 
 	for (var z=0; z < pixh; ++z) {
 		for (var x=0; x < pixw; ++x) {
@@ -31,11 +68,48 @@ function buildMapFromImageData(pix) {
 					h = HEIGHT;
 				
 				if (data[offset+1] > 200) {
-					cameras.push(vec2.fromValues(x + .5, z + .5));
+					if (vec2.equals([x,z], doorCameraLoc)) {
+						var dc = vec2.fromValues(x + .5, z + .1);
+						dc.doorCam = true;
+						cameras.push(dc);
+					}
+					else
+						cameras.push(vec2.fromValues(x + .5, z + .5));
 				}
 				else {
 					++inuse;
 					grid[gridOffset] = true;
+					
+					// determine color to use
+					var topColor = vec3.create();
+					var botColor = vec3.create();
+
+					if (x >= homeBaseMin[0] && x <= homeBaseMax[0] && z >= homeBaseMin[1] && z <= homeBaseMax[1]) {
+						vec3.copy(topColor, cornerColors[4]);
+						vec3.scale(botColor, topColor, 0.6);
+					}
+					else {
+						var cornerDist = vec4.create();
+						cornerDist[0] = vec2.squaredDistance(corners[0], [x, z]);
+						cornerDist[1] = vec2.squaredDistance(corners[1], [x, z]);
+						cornerDist[2] = vec2.squaredDistance(corners[2], [x, z]);
+						cornerDist[3] = vec2.squaredDistance(corners[3], [x, z]);
+					
+						vec4.normalize(cornerDist, cornerDist);
+					
+						cornerDist[0] = .5 + (.5 * Math.cos(Math.PI * cornerDist[0]));
+						cornerDist[1] = .5 + (.5 * Math.cos(Math.PI * cornerDist[1]));
+						cornerDist[2] = .5 + (.5 * Math.cos(Math.PI * cornerDist[2]));
+						cornerDist[3] = .5 + (.5 * Math.cos(Math.PI * cornerDist[3]));
+					
+						vec3.scaleAndAdd(topColor, topColor, cornerColors[0], cornerDist[0]); // may exceed 1 for factors, but will be clamped by gpu
+						vec3.scaleAndAdd(topColor, topColor, cornerColors[1], cornerDist[1]);
+						vec3.scaleAndAdd(topColor, topColor, cornerColors[2], cornerDist[2]);
+						vec3.scaleAndAdd(topColor, topColor, cornerColors[3], cornerDist[3]);
+
+						vec3.scale(botColor, topColor, botDarkenFactor);
+						vec3.scale(topColor, topColor, topDarkenFactor);
+					}
 				
 					// ccw
 					// wall top
@@ -48,6 +122,7 @@ function buildMapFromImageData(pix) {
 					vtx(xb, h, za);
 				
 					nrm6(north);
+					col6(topColor, botColor);
 
 					// wall left
 					vtx(xa, h, za);
@@ -59,6 +134,7 @@ function buildMapFromImageData(pix) {
 					vtx(xa, h, za);
 
 					nrm6(west);
+					col6(topColor, botColor);
 				
 					// wall bottom
 					vtx(xa, h, zb);
@@ -70,6 +146,7 @@ function buildMapFromImageData(pix) {
 					vtx(xa, h, zb);
 
 					nrm6(south);
+					col6(topColor, botColor);
 
 					// wall right
 					vtx(xb, h, zb);
@@ -81,6 +158,7 @@ function buildMapFromImageData(pix) {
 					vtx(xb, h, zb);
 
 					nrm6(east);
+					col6(topColor, botColor);
 				}
 			}
 
@@ -88,14 +166,9 @@ function buildMapFromImageData(pix) {
 			gridOffset++;
 		}
 	}
-	
-	var wallColor = [32.0/255, 43.0/255, 222.0/255];
-	for (var cx=0; cx < vertexes.length / 3; ++cx) {
-		colors.push(wallColor[0], wallColor[1], wallColor[2]);
-	}
 
-	console.info("inuse", inuse);
-	console.info("vtx", vertexes.length, "cam", cameras.length);
+	console.info("map inuse", inuse);
+	console.info("vtx", vertexes.length / 3, "cams", cameras.length);
 
 	return {
 		cameras: cameras,
