@@ -20,6 +20,11 @@ var KEY_UP = 38, KEY_DOWN = 40, KEY_LEFT = 37, KEY_RIGHT = 39,
 	KEY_W = 'W'.charCodeAt(0), KEY_A = 'A'.charCodeAt(0), KEY_S = 'S'.charCodeAt(0), KEY_D = 'D'.charCodeAt(0);
 
 
+function intRandom(choices) {
+	return (Math.random() * choices) << 0;
+}
+
+
 function TriMesh(vertexArray, normalArray, colorArray, uvArray) {
 	assert(vertexArray && vertexArray.length && (vertexArray.length % 9 == 0), "vertex array must be a triangle soup"); // 3 vtx * 3 floats
 	assert(normalArray && (normalArray.length == vertexArray.length), "normal array must be same size as vertex array");
@@ -671,6 +676,7 @@ function Abomination(index) {
 	];
 	
 	this.direction = this.spawnData[index].direction;
+	this.nextDir = "";
 	this.pathPos = vec2.clone(this.spawnData[index].pathPos);
 	this.pathStep = 0;
 	this.lastStepT = 0;
@@ -714,18 +720,44 @@ function Abomination(index) {
 				if (this.pathStep == 2) {
 					vec2.add(this.pathPos, this.pathPos, dirVec2);
 					this.pathStep = 0;
+
 					var exits = state.grid.pathExits(this.pathPos, this.direction);
-					this.direction = exits[0].dir;
+					var exit = exits[intRandom(exits.length)];
+					
+					if (exit.dir != this.direction) {
+						this.nextDir = exit.dir;
+						this.phase = "turn";
+					}
 				}
 			}
 		} // move
 		else if (this.phase == "turn") {
+			var step = Math.max(0, Math.min(1, (state.tCur - this.lastStepT) / this.turnDuration));
+			step = step * step;
+		
+			var fromAngle = this.rotations[this.direction];
+			var toAngle = this.rotations[this.nextDir];
+			var rotation = toAngle - fromAngle;
+			if (rotation < (Math.PI * -.51)) {
+				rotation += Math.PI * 2;
+			}
+			if (rotation > (Math.PI * .51)) {
+				rotation -= Math.PI * 2;
+			}
+
+			this.model.setRotation(rotAxis, fromAngle + rotation * step);
 			
+			if (step >= 1.0) {
+				this.phase = "move";
+				this.direction = this.nextDir;
+				this.nextDir = "";
+				this.lastStepT = state.tCur;
+			}
 		}
 	};
 
 	this.draw = function() {
-		this.model.draw(state.camera, state.texturedProgram, this.pathStep & 1);
+		this.model.draw(state.camera, state.texturedProgram, 1 - (this.pathStep & 1));
 	};
 }
 

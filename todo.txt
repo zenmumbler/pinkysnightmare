@@ -1,6 +1,5 @@
 TODO
 ————
-- pac path tracing
 - pac player collision
 
 - player death (game states)
@@ -48,3 +47,4 @@ DONE
 - pac paths in level image
 - door opens when all locks gone
 
+- pac path tracing
