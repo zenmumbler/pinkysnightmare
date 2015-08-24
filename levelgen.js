@@ -41,15 +41,15 @@ function buildMapFromImageData(pix) {
 
 	var cornerColors = [
 		u8Color(32, 43, 222),      // topleft
-		u8Color(0, 252, 222),      // topright
 		u8Color(255, 184, 71),     // botleft
+		u8Color(0, 252, 222),      // topright
 		u8Color(255, 37, 0),       // botright
 
 		u8Color(0xff, 0xd7, 0x00)  // homebase
 	];
 	
-	var topDarkenFactor = 0.5,
-		botDarkenFactor = 0.32;        // bottom vertices are darker than top ones
+	var topDarkenFactor = 0.65,
+		botDarkenFactor = 0.30;    // bottom vertices are darker than top ones
 	
 	// home base in the grid
 	var homeBaseMin = [21,26],
@@ -73,8 +73,9 @@ function buildMapFromImageData(pix) {
 						dc.doorCam = true;
 						cameras.push(dc);
 					}
-					else
+					else {
 						cameras.push(vec2.fromValues(x + .5, z + .5));
+					}
 				}
 				else {
 					++inuse;
@@ -89,6 +90,7 @@ function buildMapFromImageData(pix) {
 						vec3.scale(botColor, topColor, 0.6);
 					}
 					else {
+						// calculate interpolated color by distance from the 4 corners of the field
 						var cornerDist = vec4.create();
 						cornerDist[0] = vec2.squaredDistance(corners[0], [x, z]);
 						cornerDist[1] = vec2.squaredDistance(corners[1], [x, z]);
