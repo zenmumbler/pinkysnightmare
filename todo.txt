@@ -1,9 +1,8 @@
 TODO
 ————
-- camera tracking
-
 - colour code maze
 - floor texture?
+- wrap tunnel
 
 - pac AI
 
@@ -28,3 +27,5 @@ DONE
 
 - movement
 - wall collisions
+
+- camera tracking
