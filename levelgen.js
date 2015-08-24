@@ -13,7 +13,7 @@ function buildMapFromImageData(pix) {
 	
 	var HEIGHT = 25.0;       // will appear inf high 
 	
-	var vertexes = [], normals = [], colors = [], cameras = [], grid = [];
+	var vertexes = [], normals = [], colors = [], cameras = [], grid = [], path = [];
 
 	function vtx(x, y, z) { vertexes.push(x, y, z); }
 	function nrm6(nrm) { for(var n=0; n<6; ++n) normals.push(nrm[0], nrm[1], nrm[2]); }
@@ -59,13 +59,22 @@ function buildMapFromImageData(pix) {
 	for (var z=0; z < pixh; ++z) {
 		for (var x=0; x < pixw; ++x) {
 			grid[gridOffset] = false;
+			path[gridOffset] = false;
+			
+			if (x == 17 && z == 12) {
+				console.info(data[offset], data[offset+1], data[offset+2], data[offset+3]);
+			}
 
-			if (data[offset] == 0) {
+			if (data[offset] < 16) {
 				var xa = x * LEVEL_SCALE,
 					xb = (x+1) * LEVEL_SCALE,
 					za = z * LEVEL_SCALE,
 					zb = (z+1) * LEVEL_SCALE,
 					h = HEIGHT;
+				
+				if (data[offset+2] > 200) {
+					path[gridOffset] = true;
+				}
 				
 				if (data[offset+1] > 200) {
 					if (vec2.equals([x,z], doorCameraLoc)) {
@@ -175,6 +184,7 @@ function buildMapFromImageData(pix) {
 	return {
 		cameras: cameras,
 		grid: grid,
+		path: path,
 		gridW: pixw,
 		gridH: pixh,
 		mesh: new TriMesh(vertexes, normals, colors),

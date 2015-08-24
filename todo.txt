@@ -1,6 +1,5 @@
 TODO
 ————
-
 - pac path tracing
 - pac player collision
 
@@ -16,6 +15,9 @@ TODO
 
 - fix fullscreen
 
+NICE
+———
+- spookje tilt
 
 
 DONE

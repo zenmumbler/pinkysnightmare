@@ -7,6 +7,7 @@ var gl;
 var state = {
 	keys: [],
 	meshes: {},
+	textures: {},
 	models: {},
 	keyItems: [],
 	pacs: []
@@ -270,7 +271,7 @@ function Square(x, y) {
 }
 
 
-function Grid(width, height, cells) {
+function Grid(width, height, cells, pathCells) {
 	var squares = [], sqix = 0;
 	for (var z=0; z<height; ++z) {
 		for (var x=0; x<width; ++x) {
@@ -289,7 +290,6 @@ function Grid(width, height, cells) {
 	function at(x, z) {
 		return squares[(z>>0) * width + (x>>0)];
 	}
-	
 
 	this.set = function(x, z, occupied) {
 		var sq = occupied ? new Square(x, z) : null;
@@ -503,7 +503,7 @@ function makeDoorMesh(cornerColors) {
 function Door() {
 	this.mesh = makeDoorMesh(state.cornerColors);
 	this.model = new Model(this.mesh);
-	this.model.texture = state.doorTex;
+	this.model.texture = state.textures["door"];
 	
 	this.state = "closed";
 
@@ -562,7 +562,7 @@ function Player() {
 	this.position = vec3.fromValues(0, 0.3, 0); // grid units
 	this.viewAngle = Math.PI / -2; // radians
 	this.turnSpeed = Math.PI; // radians / sec
-	this.speed = 2; // grid units / sec
+	this.speed = 2.3; // grid units / sec
 	this.radius = .25; // grid units
 
 	this.model.setUniformScale(1);
@@ -632,9 +632,26 @@ function Player() {
 }
 
 
+function Abomination() {
+	this.model = new Model(state.meshes["pac1"], state.meshes["pac2"]);
+	this.model.texture = state.textures["crackpac"];
+	this.position = vec3.create();
+
+	this.model.setUniformScale(5);
+
+	this.update = function(dt) {
+	};
+
+	this.draw = function() {
+		this.model.draw(state.camera, state.texturedProgram, 1);
+	};
+}
+
+
 function drawScene(camera) {
 	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
+	// -- PLAIN MODELS
 	gl.useProgram(state.modelProgram);
 	gl.uniformMatrix4fv(state.modelProgram.projMatrixUniform, false, camera.projectionMatrix);
 	if (state.modelProgram.timeUniform)
@@ -644,13 +661,14 @@ function drawScene(camera) {
 	state.player.draw();
 	state.keyItems.forEach(function(key) { key.draw(); });
 
+	// -- TEXTURED MODELS
 	gl.useProgram(state.texturedProgram);
 	gl.uniformMatrix4fv(state.texturedProgram.projMatrixUniform, false, camera.projectionMatrix);
 	if (state.texturedProgram.timeUniform)
 		gl.uniform1f(state.texturedProgram.timeUniform, state.tCur);
 
-	state.models["pac"].draw(camera, state.texturedProgram, 1);
 	state.door.draw();
+	state.pacs.forEach(function(pac) { pac.draw(); });
 }
 
 
@@ -757,7 +775,8 @@ function nextFrame() {
 	camera.pickClosestVantagePoint();
 	state.player.update(dt);
 	state.keyItems.forEach(function(key) { key.update(dt); });
-	state.door.update();
+	state.door.update(dt);
+	state.pacs.forEach(function(pac) { pac.update(dt); });
 
 	// -- render
 	drawScene(camera);
@@ -783,6 +802,8 @@ function run() {
 	state.keyItems.push(new Key(3));
 	
 	state.door = new Door();
+	
+	state.pacs.push(new Abomination());
 
 	nextFrame();
 }
@@ -821,16 +842,18 @@ function init() {
 			state.meshes["map"] = mapData.mesh;
 			state.models["map"] = new Model(mapData.mesh);
 			state.camera.fixedPoints = mapData.cameras;
-			state.grid = new Grid(mapData.gridW, mapData.gridH, mapData.grid);
+			state.grid = new Grid(mapData.gridW, mapData.gridH, mapData.grid, mapData.path);
 			state.cornerColors = mapData.cornerColors;
 
 			var pacColor = u8Color(213, 215, 17);
 
 			// Promises are for wimps
 			createStandardTexture("doortex.png", function(doorTex) {
-				state.doorTex = doorTex;
+				state.textures["door"] = doorTex;
 
 				createStandardTexture("crackpac.png", function(pacTex) {
+					state.textures["crackpac"] = pacTex;
+
 					loadObjFile("pac1.obj", function(pac1Data) {
 						var pac1Colors = genColorArray(pacColor, pac1Data.elements);
 						state.meshes["pac1"] = new TriMesh(pac1Data.vertexes, pac1Data.normals, pac1Colors, pac1Data.uvs);
@@ -838,12 +861,6 @@ function init() {
 						loadObjFile("pac2.obj", function(pac2Data) {
 							var pac2Colors = genColorArray(pacColor, pac2Data.elements);
 							state.meshes["pac2"] = new TriMesh(pac2Data.vertexes, pac2Data.normals, pac2Colors, pac2Data.uvs);
-
-							var pac = new Model(state.meshes["pac1"], state.meshes["pac2"]);
-							pac.setUniformScale(5);
-							pac.setPosition([54, 0.1, 36]);
-							pac.texture = pacTex;
-							state.models["pac"] = pac;
 
 							loadObjFile("key.obj", function(keyData) {
 								var keyColors = genColorArray(u8Color(201,163,85), keyData.elements);
