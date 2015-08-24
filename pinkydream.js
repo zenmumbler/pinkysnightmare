@@ -301,7 +301,7 @@ function Player(model) {
 	this.position = vec3.fromValues(0, 0.3, 0); // grid units
 	this.viewAngle = Math.PI / 2; // radians
 	this.turnSpeed = Math.PI; // radians / sec
-	this.speed = 1; // grid units / sec
+	this.speed = 1.75; // grid units / sec
 	this.radius = .25; // grid units
 
 	this.model.setUniformScale(1);
