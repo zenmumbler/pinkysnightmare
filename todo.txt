@@ -1,11 +1,10 @@
 TODO
 ————
 
-- place door
-- collide door (hack via grid)
-
-- pac paths in level image
 - pac path tracing
+- pac player collision
+
+- player death (game states)
 
 - pac sounds
 - death sound
@@ -15,7 +14,6 @@ TODO
 - title screen
 - finish screen
 
-- floor texture?
 - fix fullscreen
 
 
@@ -41,3 +39,10 @@ DONE
 
 - place keys
 - collide keys
+
+- place door
+- collide door (hack via grid)
+
+- pac paths in level image
+- door opens when all locks gone
+

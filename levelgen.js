@@ -40,10 +40,10 @@ function buildMapFromImageData(pix) {
 	];
 
 	var cornerColors = [
-		u8Color(32, 43, 222),      // topleft
-		u8Color(255, 184, 71),     // botleft
-		u8Color(0, 252, 222),      // topright
-		u8Color(255, 37, 0),       // botright
+		u8Color(32, 43, 222),
+		u8Color(255, 184, 71),
+		u8Color(255, 37, 0),
+		u8Color(0, 252, 222),
 
 		u8Color(0xff, 0xd7, 0x00)  // homebase
 	];
@@ -99,10 +99,10 @@ function buildMapFromImageData(pix) {
 					
 						vec4.normalize(cornerDist, cornerDist);
 					
-						cornerDist[0] = .5 + (.5 * Math.cos(Math.PI * cornerDist[0]));
-						cornerDist[1] = .5 + (.5 * Math.cos(Math.PI * cornerDist[1]));
-						cornerDist[2] = .5 + (.5 * Math.cos(Math.PI * cornerDist[2]));
-						cornerDist[3] = .5 + (.5 * Math.cos(Math.PI * cornerDist[3]));
+						cornerDist[0] = Math.pow(.5 + (.5 * Math.cos(Math.PI * cornerDist[0])), 2);
+						cornerDist[1] = Math.pow(.5 + (.5 * Math.cos(Math.PI * cornerDist[1])), 2);
+						cornerDist[2] = Math.pow(.5 + (.5 * Math.cos(Math.PI * cornerDist[2])), 2);
+						cornerDist[3] = Math.pow(.5 + (.5 * Math.cos(Math.PI * cornerDist[3])), 2);
 					
 						vec3.scaleAndAdd(topColor, topColor, cornerColors[0], cornerDist[0]); // may exceed 1 for factors, but will be clamped by gpu
 						vec3.scaleAndAdd(topColor, topColor, cornerColors[1], cornerDist[1]);
@@ -177,7 +177,8 @@ function buildMapFromImageData(pix) {
 		grid: grid,
 		gridW: pixw,
 		gridH: pixh,
-		mesh: new TriMesh(vertexes, normals, colors)
+		mesh: new TriMesh(vertexes, normals, colors),
+		cornerColors: cornerColors
 	};
 }
 

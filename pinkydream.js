@@ -9,8 +9,7 @@ var state = {
 	meshes: {},
 	models: {},
 	keyItems: [],
-	pacs: [],
-	entities: []
+	pacs: []
 };
 
 var active = true;
@@ -291,6 +290,12 @@ function Grid(width, height, cells) {
 		return squares[(z>>0) * width + (x>>0)];
 	}
 	
+
+	this.set = function(x, z, occupied) {
+		var sq = occupied ? new Square(x, z) : null;
+		squares[(z>>0) * width + (x>>0)] = sq;
+	};
+	
 	
 	this.castRay = function(from, direction) /* -> Square? */ {
 		// adapted from sample code at: http://lodev.org/cgtutor/raycasting.html
@@ -394,13 +399,16 @@ function Grid(width, height, cells) {
 
 
 function Key(index) {
-	this.model = new Model(state.meshes["key"]);
+	this.keyModel = new Model(state.meshes["key"]);
+	this.lockModel = new Model(state.meshes["lock"]);
 	this.index = index;
 	this.found = false;
-	this.position = vec3.create();
+	this.keyPosition = vec3.create();
+	this.lockPosition = vec3.create();
 	this.radius = 0.5;
 	
-	this.model.setUniformScale(1);
+	this.keyModel.setUniformScale(1);
+	this.lockModel.setUniformScale(0.02);
 	
 	var scaledPos = vec3.create();
 	var rotAxis = vec3.fromValues(0, 1, 0);
@@ -411,39 +419,140 @@ function Key(index) {
 		[4.5, .2, 48.5],
 		[52.5, .2, 48.5]
 	];
-	var keyPositionsFound = [
-		[29, 3.0, 27],
-		[28, 3.0, 27],
-		[29, 1.5, 27],
-		[28, 1.5, 27]
-	];
 
-	vec3.copy(this.position, keyPositions[this.index]);
-	vec3.scale(scaledPos, this.position, LEVEL_SCALE);
-	this.model.setPosition(scaledPos);
+	var lockPositions = [
+		[29.3, 2.3, 26.8],
+		[27.5, 2.3, 26.8],
+		[29.3, 0.6, 26.8],
+		[27.5, 0.6, 26.8]
+	];
+	
+	var lockRotAxis = [0,0,1],
+		lockRotMax = Math.PI / 40;
+
+	vec3.copy(this.keyPosition, keyPositions[this.index]);
+	vec3.scale(scaledPos, this.keyPosition, LEVEL_SCALE);
+	this.keyModel.setPosition(scaledPos);
+
+	vec3.copy(this.lockPosition, lockPositions[this.index]);
+	vec3.scale(scaledPos, this.lockPosition, LEVEL_SCALE);
+	this.lockModel.setPosition(scaledPos);
 
 	this.update = function(dt) {
 		if (this.found)
 			return;
 
 		var playerPos = vec2.fromValues(state.player.position[0], state.player.position[2]);
-		var myPos = vec2.fromValues(this.position[0], this.position[2]);
+		var myPos = vec2.fromValues(this.keyPosition[0], this.keyPosition[2]);
 		
 		var maxRadius = Math.max(this.radius, state.player.radius);
 		if (vec2.distance(playerPos, myPos) < maxRadius) {
 			this.found = true;
-
-			vec3.copy(this.position, keyPositionsFound[this.index]);
-			vec3.scale(scaledPos, this.position, LEVEL_SCALE);
-			this.model.setPosition(scaledPos);
-			this.model.setRotation(rotAxis, 0);
 		}
 	};
 
 	this.draw = function() {
-		if (! this.found)
-	 		this.model.setRotation(rotAxis, state.tCur * 1.3);
-		this.model.draw(state.camera, state.modelProgram, 0);
+		if (! this.found) {
+	 		this.keyModel.setRotation(rotAxis, state.tCur * 1.3);
+			this.keyModel.draw(state.camera, state.modelProgram, 0);
+
+			var lrt = lockRotMax * Math.sin(state.tCur * 2);
+			this.lockModel.setRotation(lockRotAxis, lrt)
+			this.lockModel.draw(state.camera, state.modelProgram, 0);
+		}
+	};
+}
+
+
+function makeDoorMesh(cornerColors) {
+	var vertexes = [], normals = [], colors = [], uvs = [];
+
+	var xa = -1.5, xb = 1.5,
+		h = 3,
+		za = 0, zb = .5;
+
+	function vtx(x, y, z) { vertexes.push(x, y, z); }
+	function col(c) { colors.push(c[0], c[1], c[2]); }
+	function nrm6(nrm) { for(var n=0; n<6; ++n) normals.push(nrm[0], nrm[1], nrm[2]); }
+		
+
+	vtx(xb, h, za); col(cornerColors[0]); uvs.push(0,0);
+	vtx(xb, 0, za); col(cornerColors[2]); uvs.push(0,1);
+	vtx(xa, 0, za); col(cornerColors[3]); uvs.push(1,1);
+
+	vtx(xa, 0, za); col(cornerColors[3]); uvs.push(1,1);
+	vtx(xa, h, za); col(cornerColors[1]); uvs.push(1,0);
+	vtx(xb, h, za); col(cornerColors[0]); uvs.push(0,0);
+
+	nrm6([0,0,-1]);
+
+	vtx(xb, h, zb); col(cornerColors[4]); uvs.push(0,0);
+	vtx(xb, h, za); col(cornerColors[4]); uvs.push(0,0);
+	vtx(xa, h, za); col(cornerColors[4]); uvs.push(0,0);
+
+	vtx(xa, h, za); col(cornerColors[4]); uvs.push(0,0);
+	vtx(xa, h, zb); col(cornerColors[4]); uvs.push(0,0);
+	vtx(xb, h, zb); col(cornerColors[4]); uvs.push(0,0);
+
+	nrm6([0,1,0]);
+	
+	return new TriMesh(vertexes, normals, colors, uvs);
+}
+
+
+function Door() {
+	this.mesh = makeDoorMesh(state.cornerColors);
+	this.model = new Model(this.mesh);
+	this.model.texture = state.doorTex;
+	
+	this.state = "closed";
+
+	this.position = vec3.fromValues(28.5, 0, 27);
+	
+	this.model.setUniformScale(4);
+	
+	var scaledPos = vec3.create();
+	vec3.scale(scaledPos, this.position, LEVEL_SCALE);
+	this.model.setPosition(scaledPos);
+
+	// block the home base	
+	state.grid.set(27, 27, true);
+	state.grid.set(28, 27, true);
+	state.grid.set(29, 27, true);
+
+	this.update = function(dt) {
+		if (this.state == "closed") {
+			var allKeys = state.keyItems.every(function(key) { return key.found; });
+
+			if (allKeys) {
+				var playerPos = vec2.fromValues(state.player.position[0], state.player.position[2]);
+				var myPos = vec2.fromValues(this.position[0], this.position[2]);
+
+				if (vec2.distance(playerPos, myPos) < 2) {
+					this.state = "opening";
+					this.openT0 = state.tCur;
+				}
+			}
+		}
+		else if (this.state == "opening") {
+			var step = Math.max(0, Math.min(1, (state.tCur - this.openT0) / 4));
+			this.position[0] = 28.5 + ((Math.random() - 0.5) * 0.03);
+			this.position[1] = -3 * step;
+			vec3.scale(scaledPos, this.position, LEVEL_SCALE);
+			this.model.setPosition(scaledPos);
+			
+			if (step == 1) {
+				// unblock
+				state.grid.set(27, 27, false);
+				state.grid.set(28, 27, false);
+				state.grid.set(29, 27, false);
+				this.state = "open";
+			}
+		}
+	};
+	
+	this.draw = function() {
+		this.model.draw(state.camera, state.texturedProgram, 0);
 	};
 }
 
@@ -453,7 +562,7 @@ function Player() {
 	this.position = vec3.fromValues(0, 0.3, 0); // grid units
 	this.viewAngle = Math.PI / -2; // radians
 	this.turnSpeed = Math.PI; // radians / sec
-	this.speed = 1.75; // grid units / sec
+	this.speed = 2; // grid units / sec
 	this.radius = .25; // grid units
 
 	this.model.setUniformScale(1);
@@ -510,7 +619,7 @@ function Player() {
 			this.position[2] = newPos[1];
 		}
 
-		// hover up and down
+		// -- they all float down here
 		this.position[1] = 0.35 + 0.05 * Math.sin(state.tCur * 3);
 	};
 
@@ -541,7 +650,7 @@ function drawScene(camera) {
 		gl.uniform1f(state.texturedProgram.timeUniform, state.tCur);
 
 	state.models["pac"].draw(camera, state.texturedProgram, 1);
-
+	state.door.draw();
 }
 
 
@@ -648,6 +757,7 @@ function nextFrame() {
 	camera.pickClosestVantagePoint();
 	state.player.update(dt);
 	state.keyItems.forEach(function(key) { key.update(dt); });
+	state.door.update();
 
 	// -- render
 	drawScene(camera);
@@ -671,6 +781,8 @@ function run() {
 	state.keyItems.push(new Key(1));
 	state.keyItems.push(new Key(2));
 	state.keyItems.push(new Key(3));
+	
+	state.door = new Door();
 
 	nextFrame();
 }
@@ -710,40 +822,51 @@ function init() {
 			state.models["map"] = new Model(mapData.mesh);
 			state.camera.fixedPoints = mapData.cameras;
 			state.grid = new Grid(mapData.gridW, mapData.gridH, mapData.grid);
+			state.cornerColors = mapData.cornerColors;
 
 			var pacColor = u8Color(213, 215, 17);
 
 			// Promises are for wimps
-			createStandardTexture("crackpac.png", function(pacTex) {
-				loadObjFile("pac1.obj", function(pac1Data) {
-					var pac1Colors = genColorArray(pacColor, pac1Data.elements);
-					state.meshes["pac1"] = new TriMesh(pac1Data.vertexes, pac1Data.normals, pac1Colors, pac1Data.uvs);
+			createStandardTexture("doortex.png", function(doorTex) {
+				state.doorTex = doorTex;
 
-					loadObjFile("pac2.obj", function(pac2Data) {
-						var pac2Colors = genColorArray(pacColor, pac2Data.elements);
-						state.meshes["pac2"] = new TriMesh(pac2Data.vertexes, pac2Data.normals, pac2Colors, pac2Data.uvs);
+				createStandardTexture("crackpac.png", function(pacTex) {
+					loadObjFile("pac1.obj", function(pac1Data) {
+						var pac1Colors = genColorArray(pacColor, pac1Data.elements);
+						state.meshes["pac1"] = new TriMesh(pac1Data.vertexes, pac1Data.normals, pac1Colors, pac1Data.uvs);
 
-						var pac = new Model(state.meshes["pac1"], state.meshes["pac2"]);
-						pac.setUniformScale(5);
-						pac.setPosition([54, 0.1, 36]);
-						pac.texture = pacTex;
-						state.models["pac"] = pac;
+						loadObjFile("pac2.obj", function(pac2Data) {
+							var pac2Colors = genColorArray(pacColor, pac2Data.elements);
+							state.meshes["pac2"] = new TriMesh(pac2Data.vertexes, pac2Data.normals, pac2Colors, pac2Data.uvs);
 
-						loadObjFile("key.obj", function(keyData) {
-							var keyColors = genColorArray(u8Color(201,163,85), keyData.elements);
-							state.meshes["key"] = new TriMesh(keyData.vertexes, keyData.normals, keyColors, null);
+							var pac = new Model(state.meshes["pac1"], state.meshes["pac2"]);
+							pac.setUniformScale(5);
+							pac.setPosition([54, 0.1, 36]);
+							pac.texture = pacTex;
+							state.models["pac"] = pac;
 
-							loadObjFile("spookje.obj", function(spookjeData) {
-								var spookjeColors = genColorArray(u8Color(255,184,221), spookjeData.elements);
-								state.meshes["spookje"] = new TriMesh(spookjeData.vertexes, spookjeData.normals, spookjeColors, null);
+							loadObjFile("key.obj", function(keyData) {
+								var keyColors = genColorArray(u8Color(201,163,85), keyData.elements);
+								state.meshes["key"] = new TriMesh(keyData.vertexes, keyData.normals, keyColors, null);
+								
+								loadObjFile("lock.obj", function(lockData) {
+									var lockColors = genColorArray(u8Color(0x66,0x77,0x88), lockData.elements);
+									state.meshes["lock"] = new TriMesh(lockData.vertexes, lockData.normals, lockColors, null);
 
-								run();
+									loadObjFile("spookje.obj", function(spookjeData) {
+										var spookjeColors = genColorArray(u8Color(255,184,221), spookjeData.elements);
+										state.meshes["spookje"] = new TriMesh(spookjeData.vertexes, spookjeData.normals, spookjeColors, null);
+
+										run();
+									});
+								});
 							});
 						});
 					});
 				});
 			});
-		});
+
+		}); // map
 	});
 }
 
