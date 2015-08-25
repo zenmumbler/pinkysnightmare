@@ -730,7 +730,8 @@ function Abomination(index) {
 		{ direction: "north", pathPos: [43, 18] },
 		{ direction: "west", pathPos: [13, 4] },
 		{ direction: "south", pathPos: [4, 43] },
-		{ direction: "north", pathPos: [49, 52] }
+		{ direction: "north", pathPos: [49, 52] },
+		{ direction: "west", pathPos: [28, 36] }
 	];
 	
 	this.direction = this.spawnData[index].direction;
@@ -738,8 +739,8 @@ function Abomination(index) {
 	this.pathPos = vec2.clone(this.spawnData[index].pathPos);
 	this.pathStep = 0;
 	this.lastStepT = 0;
-	this.stepDuration = 0.4;
-	this.turnDuration = 0.7;
+	this.stepDuration = 0.33;
+	this.turnDuration = 0.6;
 	this.radius = 1.4;
 	
 	this.rotations = {
@@ -994,6 +995,7 @@ function run() {
 	state.pacs.push(new Abomination(1));
 	state.pacs.push(new Abomination(2));
 	state.pacs.push(new Abomination(3));
+	state.pacs.push(new Abomination(4));
 
 	nextFrame();
 }
