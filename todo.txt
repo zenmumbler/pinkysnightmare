@@ -1,7 +1,5 @@
 TODO
 ————
-- player victory
-
 - pac sounds
 - death sound
 - key sound
@@ -47,3 +45,5 @@ DONE
 - title screen
 
 - player death (game states)
+- player victory
+

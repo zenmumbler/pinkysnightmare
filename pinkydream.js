@@ -621,6 +621,7 @@ function End() {
 	};
 }
 
+
 function Player() {
 	this.model = new Model(state.meshes["spookje"]);
 	this.position = vec3.fromValues(0, 0.3, 0); // grid units
@@ -726,7 +727,10 @@ function Abomination(index) {
 	this.phase = "move";
 	
 	this.spawnData = [
- 		{ direction: "north", pathPos: [43, 18]	}
+		{ direction: "north", pathPos: [43, 18] },
+		{ direction: "west", pathPos: [13, 4] },
+		{ direction: "south", pathPos: [4, 43] },
+		{ direction: "north", pathPos: [49, 52] }
 	];
 	
 	this.direction = this.spawnData[index].direction;
@@ -950,10 +954,6 @@ function nextFrame() {
 	var camera = state.camera;
 
 	// -- update
-	if (state.keys[KEY_K]) {
-		state.keyItems.forEach(function(key) { key.found = true; })
-	}
-
 	state.end.update(dt);
 	camera.pickClosestVantagePoint();
 	state.player.update(dt);
@@ -991,6 +991,9 @@ function run() {
 	state.end = new End();
 	
 	state.pacs.push(new Abomination(0));
+	state.pacs.push(new Abomination(1));
+	state.pacs.push(new Abomination(2));
+	state.pacs.push(new Abomination(3));
 
 	nextFrame();
 }
@@ -1013,14 +1016,14 @@ function init() {
 		window.onkeydown = function(evt) {
 			var kc = evt.keyCode;
 			state.keys[kc] = true;
-// 			if (! evt.modifiers)
-// 				evt.preventDefault();
+			if (! evt.modifiers)
+				evt.preventDefault();
 		};
 		window.onkeyup = function(evt) {
 			var kc = evt.keyCode;
 			state.keys[kc] = false;
-// 			if (! evt.modifiers)
-// 				evt.preventDefault();
+			if (! evt.modifiers)
+				evt.preventDefault();
 		};
 		window.onblur = function() { active = false; state.keys = []; };
 		window.onfocus = function() {
