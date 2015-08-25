@@ -13,11 +13,12 @@ var state = {
 	pacs: []
 };
 
-var active = true;
+var active = true, mode = "title";
 
 var KEY_UP = 38, KEY_DOWN = 40, KEY_LEFT = 37, KEY_RIGHT = 39,
 	KEY_SPACE = 32, KEY_RETURN = 13,
-	KEY_W = 'W'.charCodeAt(0), KEY_A = 'A'.charCodeAt(0), KEY_S = 'S'.charCodeAt(0), KEY_D = 'D'.charCodeAt(0);
+	KEY_W = 'W'.charCodeAt(0), KEY_A = 'A'.charCodeAt(0), KEY_S = 'S'.charCodeAt(0), KEY_D = 'D'.charCodeAt(0),
+	KEY_K = 'K'.charCodeAt(0);
 
 
 function intRandom(choices) {
@@ -140,6 +141,10 @@ function Model(/* mesh0, mesh1, ... */) {
 
 	this.setUniformScale = function(s) {
 		mat4.fromScaling(scaleMat, [s, s, s]);
+	};
+
+	this.setScale = function(sx, sy, sz) {
+		mat4.fromScaling(scaleMat, [sx, sy, sz]);
 	};
 
 	this.setPosition = function(v3) {
@@ -588,6 +593,34 @@ function Door() {
 }
 
 
+function End() {
+	this.position = [28.5, 29.5];
+	this.radius = 1;
+	this.fadeSec = 4;
+	this.T = -1;
+
+	this.update = function(dt) {
+		var playerPos = vec2.fromValues(state.player.position[0], state.player.position[2]);
+		if (vec2.distance(playerPos, this.position) < this.radius) {
+			this.T = state.tCur;
+
+			var totalSeconds = this.T << 0;
+			var minutes = (totalSeconds / 60) << 0;
+			var seconds = totalSeconds - (minutes * 60);
+
+			$1("#minutes").textContent = "" + minutes;
+			$1("#seconds").textContent = "" + seconds;
+			
+			hide("canvas");
+			show("#victory");
+			mode = "victory";
+		}
+	};
+	
+	this.draw = function() {
+	};
+}
+
 function Player() {
 	this.model = new Model(state.meshes["spookje"]);
 	this.position = vec3.fromValues(0, 0.3, 0); // grid units
@@ -595,6 +628,7 @@ function Player() {
 	this.turnSpeed = Math.PI; // radians / sec
 	this.speed = 2.3; // grid units / sec
 	this.radius = .25; // grid units
+	this.dieT = -1;
 
 	this.model.setUniformScale(1);
 
@@ -607,47 +641,68 @@ function Player() {
 
 	var moveMat = mat2.create();
 	var movePos = vec2.create();
+	
+	this.die = function() {
+		if (this.dieT < 0) {
+			this.dieT = state.tCur;
+		}
+	};
 
 	this.update = function(dt) {
-		// -- rotation
-		var turnAngle = 0;
-		if (state.keys[KEY_LEFT]) {
-			turnAngle = -this.turnSpeed;
-		}
-		else if (state.keys[KEY_RIGHT]) {
-			turnAngle = this.turnSpeed;
-		}
-		this.viewAngle += turnAngle * dt;
-
-		// -- movement
-		var speed = 0;
-		if (state.keys[KEY_UP]) {
-			speed = -this.speed;
-		}
-		else if (state.keys[KEY_DOWN]) {
-			speed = this.speed;
-		}
-
-		if (speed != 0) {
-			mat2.fromRotation(moveMat, this.viewAngle);
-			mat2.scale(moveMat, moveMat, [speed * dt, speed * dt]);
-			vec2.set(movePos, 1, 0);
-			vec2.transformMat2(movePos, movePos, moveMat);
-
-			var oldPos = vec2.fromValues(this.position[0], this.position[2]);
-			var newPos = vec2.create();
-			vec2.add(newPos, oldPos, movePos);
-
-			newPos = state.grid.collideAndResolveCircle(oldPos, newPos, this.radius);
+		if (this.dieT >= 0) {
+			var meltStep = (state.tCur - this.dieT) / 4;
+			var meltClamp = Math.max(0, Math.min(1, meltStep));
+			this.model.setScale(1 + meltClamp * 3, Math.max(0.1, Math.pow(1 - meltClamp, 2)), 1 + meltClamp * 3);
 			
-			// warp tunnel
-			if (newPos[0] < 0)
-				newPos[0] += state.grid.width;
-			if (newPos[0] >= state.grid.width)
-				newPos[0] -= state.grid.width;
+			if (meltStep >= 2) {
+				// back to original position
+				this.model.setUniformScale(1);
+				this.moveTo2D(28.5, 25);
+				this.viewAngle = Math.PI / -2; // radians
+				this.dieT = -1;
+			}
+		}
+		else {
+			// -- rotation
+			var turnAngle = 0;
+			if (state.keys[KEY_LEFT] || state.keys[KEY_A]) {
+				turnAngle = -this.turnSpeed;
+			}
+			else if (state.keys[KEY_RIGHT] || state.keys[KEY_D]) {
+				turnAngle = this.turnSpeed;
+			}
+			this.viewAngle += turnAngle * dt;
 
-			this.position[0] = newPos[0];
-			this.position[2] = newPos[1];
+			// -- movement
+			var speed = 0;
+			if (state.keys[KEY_UP] || state.keys[KEY_W]) {
+				speed = -this.speed;
+			}
+			else if (state.keys[KEY_DOWN] || state.keys[KEY_S]) {
+				speed = this.speed;
+			}
+
+			if (speed != 0) {
+				mat2.fromRotation(moveMat, this.viewAngle);
+				mat2.scale(moveMat, moveMat, [speed * dt, speed * dt]);
+				vec2.set(movePos, 1, 0);
+				vec2.transformMat2(movePos, movePos, moveMat);
+
+				var oldPos = vec2.fromValues(this.position[0], this.position[2]);
+				var newPos = vec2.create();
+				vec2.add(newPos, oldPos, movePos);
+
+				newPos = state.grid.collideAndResolveCircle(oldPos, newPos, this.radius);
+			
+				// warp tunnel
+				if (newPos[0] < 0)
+					newPos[0] += state.grid.width;
+				if (newPos[0] >= state.grid.width)
+					newPos[0] -= state.grid.width;
+
+				this.position[0] = newPos[0];
+				this.position[2] = newPos[1];
+			}
 		}
 
 		// -- they all float down here
@@ -671,8 +726,7 @@ function Abomination(index) {
 	this.phase = "move";
 	
 	this.spawnData = [
-// 		{ direction: "north", pathPos: [43, 18]	}
-		{ direction: "north", pathPos: [31, 24]	}
+ 		{ direction: "north", pathPos: [43, 18]	}
 	];
 	
 	this.direction = this.spawnData[index].direction;
@@ -680,8 +734,9 @@ function Abomination(index) {
 	this.pathPos = vec2.clone(this.spawnData[index].pathPos);
 	this.pathStep = 0;
 	this.lastStepT = 0;
-	this.stepDuration = 0.5;
-	this.turnDuration = 1;
+	this.stepDuration = 0.4;
+	this.turnDuration = 0.7;
+	this.radius = 1.4;
 	
 	this.rotations = {
 		north: Math.PI,
@@ -738,10 +793,10 @@ function Abomination(index) {
 			var fromAngle = this.rotations[this.direction];
 			var toAngle = this.rotations[this.nextDir];
 			var rotation = toAngle - fromAngle;
-			if (rotation < (Math.PI * -.51)) {
+			if (rotation < (Math.PI * -1.01)) {
 				rotation += Math.PI * 2;
 			}
-			if (rotation > (Math.PI * .51)) {
+			if (rotation > (Math.PI * 1.01)) {
 				rotation -= Math.PI * 2;
 			}
 
@@ -754,6 +809,15 @@ function Abomination(index) {
 				this.lastStepT = state.tCur;
 			}
 		}
+		
+		// -- check collisions against player
+		var playerPos = vec2.fromValues(state.player.position[0], state.player.position[2]);
+		
+		var maxRadius = Math.max(this.radius, state.player.radius);
+		if (vec2.distance(playerPos, this.pathPos) < maxRadius) {
+			state.player.die();
+		}
+
 	};
 
 	this.draw = function() {
@@ -816,7 +880,7 @@ function createStandardTexture(fileName, then) {
 	var image = new Image();
 	image.onload = function() {
 		gl.bindTexture(gl.TEXTURE_2D, texture);
-		gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+// 		gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
 		gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
@@ -886,6 +950,11 @@ function nextFrame() {
 	var camera = state.camera;
 
 	// -- update
+	if (state.keys[KEY_K]) {
+		state.keyItems.forEach(function(key) { key.found = true; })
+	}
+
+	state.end.update(dt);
 	camera.pickClosestVantagePoint();
 	state.player.update(dt);
 	state.keyItems.forEach(function(key) { key.update(dt); });
@@ -897,12 +966,15 @@ function nextFrame() {
 
 	state.tLast = state.tCur;
 
-	if (active)
+	if (active && (state.end.T < 0))
 		requestAnimationFrame(nextFrame);
 }
 
 
 function run() {
+	show("canvas");
+	mode = "game";
+
 	state.t0 = Date.now() / 1000.0;
 	state.tCur = 0;
 	state.tLast = 0;
@@ -916,10 +988,19 @@ function run() {
 	state.keyItems.push(new Key(3));
 	
 	state.door = new Door();
+	state.end = new End();
 	
 	state.pacs.push(new Abomination(0));
 
 	nextFrame();
+}
+
+
+function showTitle() {
+	mode = "title";
+	hide("canvas");
+	hide("#victory");
+	show("#run");
 }
 
 
@@ -941,15 +1022,23 @@ function init() {
 // 			if (! evt.modifiers)
 // 				evt.preventDefault();
 		};
-		window.onblur = function() { active = false; };
+		window.onblur = function() { active = false; state.keys = []; };
 		window.onfocus = function() {
-			state.tLast = (Date.now() / 1000.0) - state.t0;
 			active = true;
-			nextFrame();
+			if (mode == "game") {
+				state.tLast = (Date.now() / 1000.0) - state.t0;
+				nextFrame();
+			}
 		};
 
-		on("button", "click", function() {
-			$1("canvas").webkitRequestFullscreen();
+		on("#run", "click", function() {
+			hide("#run");
+			hide("#victory");
+			run();
+		});
+
+		on("#victory", "click", function() {
+			location.reload();
 		});
 
 		genMapMesh(function(mapData) {
@@ -988,7 +1077,7 @@ function init() {
 										var spookjeColors = genColorArray(u8Color(255,184,221), spookjeData.elements);
 										state.meshes["spookje"] = new TriMesh(spookjeData.vertexes, spookjeData.normals, spookjeColors, null);
 
-										run();
+										showTitle();
 									});
 								});
 							});

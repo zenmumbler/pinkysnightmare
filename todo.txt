@@ -1,22 +1,17 @@
 TODO
 ————
-- pac player collision
-
-- player death (game states)
+- player victory
 
 - pac sounds
 - death sound
 - key sound
 - bg sound
 
-- title screen
-- finish screen
-
-- fix fullscreen
 
 NICE
 ———
 - spookje tilt
+- fix fullscreen
 
 
 DONE
@@ -48,3 +43,7 @@ DONE
 - door opens when all locks gone
 
 - pac path tracing
+- pac player collision
+- title screen
+
+- player death (game states)
