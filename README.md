@@ -22,19 +22,21 @@ Find the 4 keys in the maze to unlock the door, but avoid the Abominations!
 * Level mesh, camera placement and enemy path generation from a PNG top down level image.
 * Basic circle-circle (entities) and circle-square grid collision detection and response.
 
-### Pros
+### The Good
 
 * First WebGL project that worked out quite well, 3d maze with collision detection etc.
 * Atmospheric look by means of look-at cameras placed high above (like early PSOne 3D games)
-  and simple fog effects + color gradients
-* Complete game with beginning and end, simple interactivity
+  and simple fog effects + color gradients.
+* Complete game with a beginning and an end. 
 
-### Cons
+### The Meh
 
 * Disorienting maze. The Pac-man maze does not lend itself well to 3rd person navigation
   (or 1st person for that matter)<br>
   The maze is color-coded from each corner to give some idea where you are but it did
   not help. A mini-map and better: a different map, would have been much better.
+* Pinky does not have a directional indicator so when standing still you can't know which
+  way you're facing.
 * No sound. I ran out of time. Adding pac grunts, key tingling etc. with distance fading
   and some simple spooky soundscape would have contributed greatly to the atmosphere.
 
