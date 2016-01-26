@@ -45,7 +45,7 @@
 	<!-- <p><button id="fullscreen">Fullscreen</button></p> -->
 	<p>&nbsp;</p>
 	<p>
-		&copy; 2015 by Arthur Langereis (<a href="https://twitter.com/zenmumbler/">@zenmumbler</a>)<br>
+		&copy; 2015-6 by Arthur Langereis (<a href="https://twitter.com/zenmumbler/">@zenmumbler</a>)<br>
 		An entry for <a href="http://ludumdare.com/compo/ludum-dare-33/?action=preview&uid=17143">Ludum Dare 33 (You are the Monster)</a>
 	</p>
 	<p>
@@ -57,26 +57,10 @@
 	<p class="attrib">Key model by `senjen` from <a href="http://www.models-resource.com/pc_computer/zelda2fps/model/5369/">The Models Resource</a></p>
 </div>
 
-<script>
-function seq(t) { return (Array.isArray(t)) ? t : [t]; }
-function $n(sel,base) { return Array.prototype.slice.call((base||document).querySelectorAll(sel), 0); }
-function $(sel,base) { return (typeof(sel) == 'string') ? $n(sel,base) : seq(sel); }
-function $1(sel,base) { return $(sel,base)[0]; }
-
-function on(target, evt, handler) { $(target).forEach(function(tgt) { tgt.addEventListener(evt, handler, false); }); }
-function show(sel,disp) { $(sel).forEach(function(el){ el.style.display = disp||"block" }); }
-function hide(sel) { $(sel).forEach(function(el){ el.style.display = "none" }); }
-
-function assert(cond, msg) {
-	if (! cond) {
-		throw new Error(msg || "assertion failed");
-	}
-}
-</script>
-<script src="gl-matrix-min.js"></script>
-<script src="objloader.js"></script>
-<script src="levelgen.js"></script>
-<script src="pinkydream.js"></script>
+<script src="../stardazed/ext/gl-matrix-min.js"></script>
+<script src="../stardazed/build/stardazed-tx.js"></script>
+<script src="build/levelgen.js"></script>
+<script src="build/pinkydream.js"></script>
 
 
 <script id="standardVert" type="x-shader/x-vertex">
