@@ -1,9 +1,9 @@
-# Blender MTL File: 'spookje.blend'
+# key
 # Material Count: 1
 
 newmtl None
 Ns 0
-Kd 1.000000 0.721569 0.866667
+Kd 0.788235 0.639216 0.333333
 Ka 1.0 1.0 1.0
 Ks 1.0 1.0 1.0
 d 1
