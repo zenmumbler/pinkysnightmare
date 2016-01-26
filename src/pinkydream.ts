@@ -13,24 +13,30 @@ import dom = sd.dom;
 
 
 var state = {
+	rctx: <render.RenderContext>null,
+	scene: <world.Scene>null,
+	
+	t0: 0,
+	tCur: 0,
+	tLast: 0,
+
+	camera: <Camera>null,
 	player: <Player>null,
-	meshes: {},
-	textures: {},
-	models: {},
+	door: <Door>null,
+	end: <End>null,
+	grid: <Grid>null,
+
+	meshes: <{ [index: string]: render.Mesh }>{},
+	textures: <{ [index: string]: render.Texture }>{},
+	models: <{ [index: string]: Model }>{},
+
+	cornerColors: <sd.Float3[]>[],
+
 	keyItems: <Key[]>[],
 	pacs: <Abomination[]>[]
 };
 
 var active = true, mode = "title";
-
-
-function genColorArray(color: sd.Float3, times: number) {
-	var result: number[] = [];
-	for (var n = 0; n < times; ++n) {
-		result.push(color[0], color[1], color[2]);
-	}
-	return result;
-}
 
 
 function u8Color(r: number, g: number, b: number): ArrayOfNumber {
@@ -45,56 +51,43 @@ class Model {
 	modelMatrix = mat4.create();
 	modelViewMatrix = mat4.create();
 	normalMatrix = mat3.create();
+	meshes: render.Mesh[];
+	texture: render.Texture;
 
-	constructor(/* mesh0, mesh1, ... */) {
-		this.meshes = [].slice.call(Model.arguments, 0);
+	constructor(...meshes: render.Mesh[]) {
+		this.meshes = meshes;
 		this.texture = null;
 	}
 	
-	draw(camera, program, meshIndex) {
-		mat4.multiply(modelMatrix, transMat, rotMat);
-		mat4.multiply(modelMatrix, modelMatrix, scaleMat);
-
-		this.debugModelMatrix = mat4.clone(modelMatrix);
-
-		mat4.multiply(modelViewMatrix, camera.viewMatrix, modelMatrix);
-		gl.uniformMatrix4fv(program.mvMatrixUniform, false, modelViewMatrix);
-
-		if (program.normalMatrixUniform) {
-			mat3.fromMat4(normalMatrix, modelViewMatrix);
-			mat3.invert(normalMatrix, normalMatrix);
-			mat3.transpose(normalMatrix, normalMatrix);
-			gl.uniformMatrix3fv(program.normalMatrixUniform, false, normalMatrix);
-		}
-
-		this.meshes[meshIndex].draw(program, this.texture);
+	draw(camera: Camera, meshIndex: number) {
+		this.meshes[meshIndex].draw(this.texture);
 	}
 
-	setUniformScale(s) {
-		mat4.fromScaling(scaleMat, [s, s, s]);
+	setUniformScale(s: number) {
+		mat4.fromScaling(this.scaleMat, [s, s, s]);
 	}
 
-	setScale(sx, sy, sz) {
-		mat4.fromScaling(scaleMat, [sx, sy, sz]);
+	setScale(sx: number, sy: number, sz: number) {
+		mat4.fromScaling(this.scaleMat, [sx, sy, sz]);
 	}
 
-	setPosition(v3) {
-		mat4.fromTranslation(transMat, v3);
+	setPosition(v3: sd.Float3) {
+		mat4.fromTranslation(this.transMat, v3);
 	}
 
-	setRotation(axis, angle) {
-		mat4.fromRotation(rotMat, angle, axis);
+	setRotation(axis: sd.Float3, angle: number) {
+		mat4.fromRotation(this.rotMat, angle, axis);
 	}
 }
 
 
 class Camera {
-	private w: number;
-	private h: number;
-	private projectionMatrix: sd.Float4x4;
-	private viewMatrix: sd.Float4x4;
+	w: number;
+	h: number;
+	projectionMatrix: sd.Float4x4;
+	viewMatrix: sd.Float4x4;
 
-	constructor(private rctx: render.RenderContext) {
+	constructor(private rctx: render.RenderContext, private fixedPoints: CameraMarker[]) {
 		this.w = rctx.gl.drawingBufferWidth;
 		this.h = rctx.gl.drawingBufferHeight;
 
@@ -113,7 +106,7 @@ class Camera {
 			return (distA < distB) ? -1 : ((distB < distA) ? 1 : 0);
 		});
 
-		var bestCam = null;
+		var bestCam: CameraMarker = null;
 		var minViewDistSq = 3.5 * 3.5;
 		var temp = vec2.create(), f2p = vec2.create();
 
@@ -222,7 +215,7 @@ class Square {
 class Grid {
 	private squares: Square[];
 
-	constructor(public width: number, public height: number, public cells, public pathCells) {
+	constructor(public width: number, public height: number, public cells: boolean[], public pathCells: boolean[]) {
 		this.squares = [];
 		var sqix = 0;
 
@@ -247,20 +240,20 @@ class Grid {
 		return this.pathCells[(z>>0) * this.width + (x>>0)];
 	}
 	
-	pathExits(curPos, curDir) {
-		var x = curPos[0], z = curPos[1], exits = [];
+	pathExits(curPos: sd.Float2, curDir: string) {
+		var x = curPos[0], z = curPos[1], exits: { pos: sd.Float2; dir: string }[] = [];
 		assert(this.pathAt(x, z), "you're not on a path!");
 
-		if ((curDir != "south") && pathAt(x, z-1))
+		if ((curDir != "south") && this.pathAt(x, z-1))
 			exits.push({ pos: [x, z-1], dir: "north" });
 
-		if ((curDir != "east") && pathAt(x-1, z))
+		if ((curDir != "east") && this.pathAt(x - 1, z))
 			exits.push({ pos: [x-1, z], dir: "west" });
 
-		if ((curDir != "north") && pathAt(x, z+1))
+		if ((curDir != "north") && this.pathAt(x, z + 1))
 			exits.push({ pos: [x, z+1], dir: "south" });
 
-		if ((curDir != "west") && pathAt(x+1, z))
+		if ((curDir != "west") && this.pathAt(x + 1, z))
 			exits.push({ pos: [x+1, z], dir: "east" });
 		
 		return exits;
@@ -286,15 +279,15 @@ class Grid {
 		var mapY = rayPosY << 0;
 
 		//length of ray from current position to next x or y-side
-		var sideDistX, sideDistY;
+		var sideDistX: number, sideDistY: number;
 
 		//length of ray from one x or y-side to next x or y-side
 		var deltaDistX = Math.sqrt(1 + (rayDirY * rayDirY) / (rayDirX * rayDirX));
 		var deltaDistY = Math.sqrt(1 + (rayDirX * rayDirX) / (rayDirY * rayDirY));
-		var perpWallDist;
+		var perpWallDist: number;
 
 		//what direction to step in x or y-direction (either +1 or -1)
-		var stepX, stepY;
+		var stepX: number, stepY: number;
 
 		var tests = 0; // limit search depth
 		//calculate step and initial sideDist
@@ -326,7 +319,7 @@ class Grid {
 				mapY += stepY;
 			}
 
-			var sq = at(mapX, mapY);
+			var sq = this.at(mapX, mapY);
 			if (sq) return sq;
 		} 
 
@@ -334,7 +327,7 @@ class Grid {
 	}
 
 
-	collideAndResolveCircle(posFrom: sd.Float2, posTo: sd.Float2, radius: number): sd.Float2 {
+	collideAndResolveCircle(posFrom: Float32Array, posTo: Float32Array, radius: number): Float32Array {
 		var direction = vec2.create();
 		vec2.subtract(direction, posTo, posFrom);
 
@@ -344,7 +337,7 @@ class Grid {
 
 		for (var tz = minZ; tz <= maxZ; ++tz) {
 			for (var tx = minX; tx <= maxX; ++tx) {
-				var sq = at(tx, tz);
+				var sq = this.at(tx, tz);
 				if (sq) toCheck.push(sq);
 			}
 		}
@@ -409,13 +402,13 @@ class Key {
 		this.keyModel.setUniformScale(1);
 		this.lockModel.setUniformScale(0.02);
 
-		vec3.copy(this.keyPosition, keyPositions[this.index]);
-		vec3.scale(scaledPos, this.keyPosition, LEVEL_SCALE);
-		this.keyModel.setPosition(scaledPos);
+		vec3.copy(this.keyPosition, Key.keyPositions[this.index]);
+		vec3.scale(this.scaledPos, this.keyPosition, LEVEL_SCALE);
+		this.keyModel.setPosition(this.scaledPos);
 
-		vec3.copy(this.lockPosition, lockPositions[this.index]);
-		vec3.scale(scaledPos, this.lockPosition, LEVEL_SCALE);
-		this.lockModel.setPosition(scaledPos);
+		vec3.copy(this.lockPosition, Key.lockPositions[this.index]);
+		vec3.scale(this.scaledPos, this.lockPosition, LEVEL_SCALE);
+		this.lockModel.setPosition(this.scaledPos);
 	}
 
 	update(dt: number) {
@@ -429,71 +422,86 @@ class Key {
 		if (vec2.distance(playerPos, myPos) < maxRadius) {
 			this.found = true;
 		}
-	}
 
-	draw() {
-		if (! this.found) {
-	 		this.keyModel.setRotation(this.rotAxis, state.tCur * 1.3);
-			this.keyModel.draw(state.camera, state.modelProgram, 0);
+		if (!this.found) {
+			this.keyModel.setRotation(this.rotAxis, state.tCur * 1.3);
 
 			var lrt = this.lockRotMax * Math.sin(state.tCur * 2);
 			this.lockModel.setRotation(this.lockRotAxis, lrt)
-			this.lockModel.draw(state.camera, state.modelProgram, 0);
 		}
 	}
 }
 
 
-function makeDoorMesh(cornerColors) {
-	var vertexes = [], normals = [], colors = [], uvs = [];
+function makeDoorMesh(rctx: render.RenderContext, cornerColors: sd.Float3[]) {
+	var md = new mesh.MeshData(mesh.AttrList.Pos3Norm3Colour3UV2());
+	md.indexBuffer = null;
+	md.primitiveGroups.push({
+		fromPrimIx: 0,
+		primCount: 6 * 2,
+		materialIx: 0
+	});
+	var vb = md.primaryVertexBuffer;
+	vb.allocate(6 * 2);
+	var vertexes = new mesh.VertexBufferAttributeView(vb, vb.attrByRole(mesh.VertexAttributeRole.Position));
+	var normals = new mesh.VertexBufferAttributeView(vb, vb.attrByRole(mesh.VertexAttributeRole.Normal));
+	var colors = new mesh.VertexBufferAttributeView(vb, vb.attrByRole(mesh.VertexAttributeRole.Colour));
+	var uvs = new mesh.VertexBufferAttributeView(vb, vb.attrByRole(mesh.VertexAttributeRole.UV));
+
+	var vi = 0, ni = 0;
 
 	var xa = -1.5, xb = 1.5,
 		h = 3,
 		za = 0, zb = .5;
 
-	function vtx(x, y, z) { vertexes.push(x, y, z); }
-	function col(c) { colors.push(c[0], c[1], c[2]); }
-	function nrm6(nrm) { for(var n=0; n<6; ++n) normals.push(nrm[0], nrm[1], nrm[2]); }
-		
+	function vtx(x: number, y: number, z: number) { vec3.set(vertexes.item(vi), x, y, z); }
+	function col(c: sd.Float3) { vec3.copy(colors.item(vi), c); }
+	function nrm6(nrm: sd.Float3) { for (var n = 0; n < 6; ++n) vec3.copy(normals.item(ni++), nrm); }
 
-	vtx(xb, h, za); col(cornerColors[0]); uvs.push(0,0);
-	vtx(xb, 0, za); col(cornerColors[2]); uvs.push(0,1);
-	vtx(xa, 0, za); col(cornerColors[3]); uvs.push(1,1);
+	vtx(xb, h, za); col(cornerColors[0]); vec2.set(uvs.item(vi), 0, 0); ++vi;
+	vtx(xb, 0, za); col(cornerColors[2]); vec2.set(uvs.item(vi), 0, 1); ++vi;
+	vtx(xa, 0, za); col(cornerColors[3]); vec2.set(uvs.item(vi), 1, 1); ++vi;
 
-	vtx(xa, 0, za); col(cornerColors[3]); uvs.push(1,1);
-	vtx(xa, h, za); col(cornerColors[1]); uvs.push(1,0);
-	vtx(xb, h, za); col(cornerColors[0]); uvs.push(0,0);
+	vtx(xa, 0, za); col(cornerColors[3]); vec2.set(uvs.item(vi), 1, 1); ++vi;
+	vtx(xa, h, za); col(cornerColors[1]); vec2.set(uvs.item(vi), 1, 0); ++vi;
+	vtx(xb, h, za); col(cornerColors[0]); vec2.set(uvs.item(vi), 0, 0); ++vi;
 
-	nrm6([0,0,-1]);
+	nrm6([0, 0, -1]);
 
-	vtx(xb, h, zb); col(cornerColors[4]); uvs.push(0,0);
-	vtx(xb, h, za); col(cornerColors[4]); uvs.push(0,0);
-	vtx(xa, h, za); col(cornerColors[4]); uvs.push(0,0);
+	vtx(xb, h, zb); col(cornerColors[4]); vec2.set(uvs.item(vi), 0, 0); ++vi;
+	vtx(xb, h, za); col(cornerColors[4]); vec2.set(uvs.item(vi), 0, 0); ++vi;
+	vtx(xa, h, za); col(cornerColors[4]); vec2.set(uvs.item(vi), 0, 0); ++vi;
 
-	vtx(xa, h, za); col(cornerColors[4]); uvs.push(0,0);
-	vtx(xa, h, zb); col(cornerColors[4]); uvs.push(0,0);
-	vtx(xb, h, zb); col(cornerColors[4]); uvs.push(0,0);
+	vtx(xa, h, za); col(cornerColors[4]); vec2.set(uvs.item(vi), 0, 0); ++vi;
+	vtx(xa, h, zb); col(cornerColors[4]); vec2.set(uvs.item(vi), 0, 0); ++vi;
+	vtx(xb, h, zb); col(cornerColors[4]); vec2.set(uvs.item(vi), 0, 0); ++vi;
 
-	nrm6([0,1,0]);
+	nrm6([0, 1, 0]);
 	
-	return new TriMesh(vertexes, normals, colors, uvs);
+	var rdesc = render.makeMeshDescriptor(md);
+	rdesc.primitiveType = mesh.PrimitiveType.Triangle;
+
+	return new render.Mesh(rctx, rdesc);
 }
 
 
 class Door {
 	state = "closed";
 	position = vec3.fromValues(28.5, 0, 27);
+	mesh: render.Mesh;
+	model: Model;
+	openT0 = 0;
+
+	private scaledPos = vec3.create();
 
 	constructor() {
-		this.mesh = makeDoorMesh(state.cornerColors);
+		this.mesh = makeDoorMesh(state.rctx, state.cornerColors);
 		this.model = new Model(this.mesh);
 		this.model.texture = state.textures["door"];
-
 		this.model.setUniformScale(4);
 
-		var scaledPos = vec3.create();
-		vec3.scale(scaledPos, this.position, LEVEL_SCALE);
-		this.model.setPosition(scaledPos);
+		vec3.scale(this.scaledPos, this.position, LEVEL_SCALE);
+		this.model.setPosition(this.scaledPos);
 
 		// block the home base	
 		state.grid.set(27, 27, true);
@@ -519,8 +527,8 @@ class Door {
 			var step = Math.max(0, Math.min(1, (state.tCur - this.openT0) / 4));
 			this.position[0] = 28.5 + ((Math.random() - 0.5) * 0.03);
 			this.position[1] = -3 * step;
-			vec3.scale(scaledPos, this.position, LEVEL_SCALE);
-			this.model.setPosition(scaledPos);
+			vec3.scale(this.scaledPos, this.position, LEVEL_SCALE);
+			this.model.setPosition(this.scaledPos);
 			
 			if (step == 1) {
 				// unblock
@@ -530,10 +538,6 @@ class Door {
 				this.state = "open";
 			}
 		}
-	}
-	
-	draw() {
-		this.model.draw(state.camera, state.texturedProgram, 0);
 	}
 }
 
@@ -564,9 +568,6 @@ class End {
 			mode = "victory";
 		}
 	}
-	
-	draw() {
-	}
 }
 
 
@@ -591,7 +592,7 @@ class Player {
 		this.model.setUniformScale(1);
 	}
 
-	moveTo2D(x, z) {
+	moveTo2D(x: number, z: number) {
 		vec3.set(this.position, x, this.position[1], z);
 	}
 
@@ -618,20 +619,20 @@ class Player {
 		else {
 			// -- rotation
 			var turnAngle = 0;
-			if (state.keys[KEY_LEFT] || state.keys[KEY_A]) {
+			if (io.keyboard.down(io.Key.LEFT) || io.keyboard.down(io.Key.A)) {
 				turnAngle = -this.turnSpeed;
 			}
-			else if (state.keys[KEY_RIGHT] || state.keys[KEY_D]) {
+			else if (io.keyboard.down(io.Key.RIGHT) || io.keyboard.down(io.Key.D)) {
 				turnAngle = this.turnSpeed;
 			}
 			this.viewAngle += turnAngle * dt;
 
 			// -- movement
 			var speed = 0;
-			if (state.keys[KEY_UP] || state.keys[KEY_W]) {
+			if (io.keyboard.down(io.Key.UP) || io.keyboard.down(io.Key.W)) {
 				speed = -this.speed;
 			}
-			else if (state.keys[KEY_DOWN] || state.keys[KEY_S]) {
+			else if (io.keyboard.down(io.Key.DOWN) || io.keyboard.down(io.Key.S)) {
 				speed = this.speed;
 			}
 
@@ -660,73 +661,77 @@ class Player {
 
 		// -- they all float down here
 		this.position[1] = 0.35 + 0.05 * Math.sin(state.tCur * 3);
-	}
 
-	draw() {
 		vec3.scale(this.scaledPos, this.position, LEVEL_SCALE);
 		this.model.setPosition(this.scaledPos);
 		this.model.setRotation(this.rotAxis, -this.viewAngle);
-		this.model.draw(state.camera, state.modelProgram, 0);
 	}
 }
 
 
-function Abomination(index: number) {
-	this.model = new Model(state.meshes["pac1"], state.meshes["pac2"]);
-	this.model.texture = state.textures["crackpac"];
-
-	this.model.setUniformScale(5);
-	this.phase = "move";
-	
-	this.spawnData = [
+class Abomination {
+	private static spawnData = [
 		{ direction: "north", pathPos: [43, 18] },
 		{ direction: "west", pathPos: [13, 4] },
 		{ direction: "south", pathPos: [4, 43] },
 		{ direction: "north", pathPos: [49, 52] },
 		{ direction: "west", pathPos: [28, 36] }
 	];
-	
-	this.direction = this.spawnData[index].direction;
-	this.nextDir = "";
-	this.pathPos = vec2.clone(this.spawnData[index].pathPos);
-	this.pathStep = 0;
-	this.lastStepT = 0;
-	this.stepDuration = 0.33;
-	this.turnDuration = 0.6;
-	this.radius = 1.4;
-	
-	this.rotations = {
+
+	private static rotations: { [index: string]: number } = {
 		north: Math.PI,
 		west: Math.PI / -2,
 		south: 0,
 		east: Math.PI / 2
 	};
-	this.directionVecs = {
-		north: [0,-1],
-		west: [-1,0],
-		south: [0,1],
-		east: [1,0]
-	};
-	var rotAxis = vec3.fromValues(0,1,0);
-	
-	var scaledPos = vec3.create();
-	var moveOffset = vec3.create();
 
-	this.update = function(dt) {
+	private static directionVecs: { [index: string]: sd.Float2 } = {
+		north: [0, -1],
+		west: [-1, 0],
+		south: [0, 1],
+		east: [1, 0]
+	};
+
+	model: Model;
+	phase = "move";
+	direction: string;
+	nextDir = "";
+	pathPos: sd.Float2;
+	pathStep = 0;
+	lastStepT = 0;
+	stepDuration = 0.33;
+	turnDuration = 0.6;
+	radius = 1.4;
+
+	private rotAxis = vec3.fromValues(0, 1, 0);
+	private scaledPos = vec3.create();
+	private moveOffset = vec3.create();
+
+	constructor(index: number) {
+		this.direction = Abomination.spawnData[index].direction;
+		this.pathPos = vec2.clone(Abomination.spawnData[index].pathPos);
+
+		this.model = new Model(state.meshes["pac1"], state.meshes["pac2"]);
+		this.model.texture = state.textures["crackpac"];
+		this.model.setUniformScale(5);
+	}
+	
+
+	update(dt: number) {
 		if (this.phase == "move") {
 			if (state.tCur - this.lastStepT > this.stepDuration) {
 				this.pathStep++;
 				this.lastStepT = state.tCur;
-				var dirVec2 = this.directionVecs[this.direction];
+				var dirVec2 = Abomination.directionVecs[this.direction];
 				var dirVec3 = vec3.fromValues(dirVec2[0], 0, dirVec2[1]);
 
-				vec3.scale(moveOffset, dirVec3, this.pathStep / 2);
-				vec3.set(scaledPos, this.pathPos[0] + 0.5, 0, this.pathPos[1] + 0.5);
-				vec3.add(scaledPos, scaledPos, moveOffset);
+				vec3.scale(this.moveOffset, dirVec3, this.pathStep / 2);
+				vec3.set(this.scaledPos, this.pathPos[0] + 0.5, 0, this.pathPos[1] + 0.5);
+				vec3.add(this.scaledPos, this.scaledPos, this.moveOffset);
 
-				vec3.scale(scaledPos, scaledPos, LEVEL_SCALE);
-				this.model.setPosition(scaledPos);
-				this.model.setRotation(rotAxis, this.rotations[this.direction]);
+				vec3.scale(this.scaledPos, this.scaledPos, LEVEL_SCALE);
+				this.model.setPosition(this.scaledPos);
+				this.model.setRotation(this.rotAxis, Abomination.rotations[this.direction]);
 				
 				// moved 1 full tile
 				if (this.pathStep == 2) {
@@ -747,8 +752,8 @@ function Abomination(index: number) {
 			var step = Math.max(0, Math.min(1, (state.tCur - this.lastStepT) / this.turnDuration));
 			step = step * step;
 		
-			var fromAngle = this.rotations[this.direction];
-			var toAngle = this.rotations[this.nextDir];
+			var fromAngle = Abomination.rotations[this.direction];
+			var toAngle = Abomination.rotations[this.nextDir];
 			var rotation = toAngle - fromAngle;
 			if (rotation < (Math.PI * -1.01)) {
 				rotation += Math.PI * 2;
@@ -757,7 +762,7 @@ function Abomination(index: number) {
 				rotation -= Math.PI * 2;
 			}
 
-			this.model.setRotation(rotAxis, fromAngle + rotation * step);
+			this.model.setRotation(this.rotAxis, fromAngle + rotation * step);
 			
 			if (step >= 1.0) {
 				this.phase = "move";
@@ -775,60 +780,22 @@ function Abomination(index: number) {
 			state.player.die();
 		}
 
-	};
+	}
 
-	this.draw = function() {
-		this.model.draw(state.camera, state.texturedProgram, 1 - (this.pathStep & 1));
-	};
+	draw() {
+		this.model.draw(state.camera, 1 - (this.pathStep & 1));
+	}
 }
 
 
 function drawScene(camera: Camera) {
-	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+	var rpd = render.makeRenderPassDescriptor();
+	vec4.set(rpd.clearColour, 0.1, 0.0, 0.05, 1);
+	rpd.clearMask = render.ClearMask.ColourDepth;
 
-	// -- PLAIN MODELS
-	gl.useProgram(state.modelProgram);
-	gl.uniformMatrix4fv(state.modelProgram.projMatrixUniform, false, camera.projectionMatrix);
-	if (state.modelProgram.timeUniform)
-		gl.uniform1f(state.modelProgram.timeUniform, state.tCur);
-
-	state.models["map"].draw(camera, state.modelProgram, 0);
-	state.player.draw();
-	state.keyItems.forEach(function(key) { key.draw(); });
-
-	// -- TEXTURED MODELS
-	gl.useProgram(state.texturedProgram);
-	gl.uniformMatrix4fv(state.texturedProgram.projMatrixUniform, false, camera.projectionMatrix);
-	if (state.texturedProgram.timeUniform)
-		gl.uniform1f(state.texturedProgram.timeUniform, state.tCur);
-
-	state.door.draw();
-	state.pacs.forEach(function(pac) { pac.draw(); });
-}
-
-
-function getShader(id: string) {
-	var shaderScript = document.getElementById(id);
-	assert(shaderScript, "no such shader: " + id);
-
-	var shader;
-	if (shaderScript.type == "x-shader/x-fragment") {
-		shader = gl.createShader(gl.FRAGMENT_SHADER);
-	} else if (shaderScript.type == "x-shader/x-vertex") {
-		shader = gl.createShader(gl.VERTEX_SHADER);
-	} else {
-		assert(false, id + " does not seem to be a shader");
-	}
-
-	gl.shaderSource(shader, shaderScript.textContent);
-	gl.compileShader(shader);
-
-	if (! gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-		alert(gl.getShaderInfoLog(shader));
-		assert(false, "bad shader");
-	}
-
-	return shader;
+	render.runRenderPass(state.rctx, rpd, null, (renderPass) => {
+		state.scene.stdModelMgr.draw(this.scene_.stdModelMgr.all(), renderPass, camera, null, world.RenderMode.Forward);
+	});
 }
 
 
@@ -898,9 +865,8 @@ function init() {
 	var rctx = render.makeRenderContext(canvas);
 	var sound = new SoundManager();
 
-	state.camera = new Camera();
-	state.modelProgram = createStandardProgram("standardVert", "standardFrag");
-	state.texturedProgram = createStandardProgram("texturedVert", "texturedFrag");
+	state.rctx = rctx;
+	state.scene = new world.Scene(rctx);
 
 	dom.on("#run", "click", function() {
 		dom.hide("#run");
@@ -912,51 +878,51 @@ function init() {
 		location.reload();
 	});
 
-	genMapMesh(function(mapData) {
+	genMapMesh(rctx, function(mapData) {
 		state.meshes["map"] = mapData.mesh;
 		state.models["map"] = new Model(mapData.mesh);
-		state.camera.fixedPoints = mapData.cameras;
+
+		state.camera = new Camera(rctx, mapData.cameras);
 		state.grid = new Grid(mapData.gridW, mapData.gridH, mapData.grid, mapData.path);
 		state.cornerColors = mapData.cornerColors;
 
-		var pacColor = u8Color(213, 215, 17);
+		var resources = [
+			mesh.loadLWObjectFile("data/models/pac1.obj").then((pac1Obj) => {
+				var md = render.makeMeshDescriptor(pac1Obj.mesh);
+				md.primitiveType = mesh.PrimitiveType.Triangle;
+				state.meshes["pac1"] = new render.Mesh(rctx, md);
+			}),
+			mesh.loadLWObjectFile("data/models/pac2.obj").then((pac2Obj) => {
+				var md = render.makeMeshDescriptor(pac2Obj.mesh);
+				md.primitiveType = mesh.PrimitiveType.Triangle;
+				state.meshes["pac2"] = new render.Mesh(rctx, md);
+			}),
+			mesh.loadLWObjectFile("data/models/key.obj").then((keyObj) => {
+				var md = render.makeMeshDescriptor(keyObj.mesh);
+				md.primitiveType = mesh.PrimitiveType.Triangle;
+				state.meshes["key"] = new render.Mesh(rctx, md);
+			}),
+			mesh.loadLWObjectFile("data/models/lock.obj").then((lockObj) => {
+				var md = render.makeMeshDescriptor(lockObj.mesh);
+				md.primitiveType = mesh.PrimitiveType.Triangle;
+				state.meshes["lock"] = new render.Mesh(rctx, md);
+			}),
+			mesh.loadLWObjectFile("data/models/spookje.obj").then((spookjeObj) => {
+				var md = render.makeMeshDescriptor(spookjeObj.mesh);
+				md.primitiveType = mesh.PrimitiveType.Triangle;
+				state.meshes["spookje"] = new render.Mesh(rctx, md);
+			}),
+			render.loadSimpleTexture(rctx, "data/tex2D/doortex.png", false).then((doorTex) => {
+				state.textures["door"] = doorTex;
+			}),
+			render.loadSimpleTexture(rctx, "data/tex2D/crackpac.png", false).then((crackTex) => {
+				state.textures["crackpac"] = crackTex;
+			}),
+		];
 
-		// Promises are for wimps
-		createStandardTexture("doortex.png", function(doorTex) {
-			state.textures["door"] = doorTex;
-
-			createStandardTexture("crackpac.png", function(pacTex) {
-				state.textures["crackpac"] = pacTex;
-
-				loadObjFile("pac1.obj", function(pac1Data) {
-					var pac1Colors = genColorArray(pacColor, pac1Data.elements);
-					state.meshes["pac1"] = new TriMesh(pac1Data.vertexes, pac1Data.normals, pac1Colors, pac1Data.uvs);
-
-					loadObjFile("pac2.obj", function(pac2Data) {
-						var pac2Colors = genColorArray(pacColor, pac2Data.elements);
-						state.meshes["pac2"] = new TriMesh(pac2Data.vertexes, pac2Data.normals, pac2Colors, pac2Data.uvs);
-
-						loadObjFile("key.obj", function(keyData) {
-							var keyColors = genColorArray(u8Color(201,163,85), keyData.elements);
-							state.meshes["key"] = new TriMesh(keyData.vertexes, keyData.normals, keyColors, null);
-							
-							loadObjFile("lock.obj", function(lockData) {
-								var lockColors = genColorArray(u8Color(0x66,0x77,0x88), lockData.elements);
-								state.meshes["lock"] = new TriMesh(lockData.vertexes, lockData.normals, lockColors, null);
-
-								loadObjFile("spookje.obj", function(spookjeData) {
-									var spookjeColors = genColorArray(u8Color(255,184,221), spookjeData.elements);
-									state.meshes["spookje"] = new TriMesh(spookjeData.vertexes, spookjeData.normals, spookjeColors, null);
-
-									showTitle();
-								});
-							});
-						});
-					});
-				});
-			});
+		Promise.all(resources).then(() => {
+			showTitle();
 		});
-
 	}); // map
 }
 

@@ -1,5 +1,5 @@
 // Part of Pinky's Nightmare
-// (c) 2015 by Arthur Langereis - @zenmumbler
+// (c) 2015-6 by Arthur Langereis - @zenmumbler
 
 const LEVEL_SCALE = 4.0;
 
@@ -21,15 +21,16 @@ interface MapData {
 	path: boolean[];
 	gridW: number;
 	gridH: number;
-	mesh: mesh.MeshData;
+	mesh: render.Mesh;
 	cornerColors: sd.Float3[];
 }
 
 
-function buildMapFromImageData(pix: ImageData): MapData {
+function buildMapFromImageData(rctx: render.RenderContext, pix: ImageData): MapData {
 	var inuse = 0, pixw = pix.width, pixh = pix.height;
 	var data = pix.data, offset = 0, gridOffset = 0;
 	var mapMesh = new mesh.MeshData(mesh.AttrList.Pos3Norm3Colour3());
+	mapMesh.indexBuffer = null;
 
 	const HEIGHT = 25.0;       // will appear inf high
 	
@@ -103,7 +104,12 @@ function buildMapFromImageData(pix: ImageData): MapData {
 		}
 	}
 
-	mapMesh.primaryVertexBuffer.allocate(inuse * 6 * 4 * 3);
+	mapMesh.primaryVertexBuffer.allocate(inuse * 6 * 4);
+	mapMesh.primitiveGroups.push({
+		fromPrimIx: 0,
+		primCount: inuse * 6 * 4,
+		materialIx: 0
+	});
 	vertexes = new mesh.VertexBufferAttributeView(mapMesh.primaryVertexBuffer, mapMesh.primaryVertexBuffer.attrByRole(mesh.VertexAttributeRole.Position)),
 	normals = new mesh.VertexBufferAttributeView(mapMesh.primaryVertexBuffer, mapMesh.primaryVertexBuffer.attrByRole(mesh.VertexAttributeRole.Normal)),
 	colors = new mesh.VertexBufferAttributeView(mapMesh.primaryVertexBuffer, mapMesh.primaryVertexBuffer.attrByRole(mesh.VertexAttributeRole.Colour)),
@@ -234,6 +240,9 @@ function buildMapFromImageData(pix: ImageData): MapData {
 		}
 	}
 
+	var rdesc = render.makeMeshDescriptor(mapMesh);
+	rdesc.primitiveType = mesh.PrimitiveType.Triangle;
+
 	console.info("map inuse", inuse);
 	console.info("vtx", vertexes.count, "cams", cameras.length);
 
@@ -243,14 +252,14 @@ function buildMapFromImageData(pix: ImageData): MapData {
 		path: path,
 		gridW: pixw,
 		gridH: pixh,
-		mesh: mapMesh,
+		mesh: new render.Mesh(rctx, rdesc),
 		cornerColors: cornerColors
 	};
 }
 
 
-function genMapMesh(then: (mapData: MapData) => void) {	
+function genMapMesh(rctx: render.RenderContext, then: (mapData: MapData) => void) {	
 	loadImageData("levelx_.png").then((pix) => {
-		then(buildMapFromImageData(pix));
+		then(buildMapFromImageData(rctx, pix));
 	});
 }
