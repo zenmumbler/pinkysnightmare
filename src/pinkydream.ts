@@ -44,39 +44,67 @@ function u8Color(r: number, g: number, b: number): ArrayOfNumber {
 }
 
 
-class Model {
-	scaleMat = mat4.create();
-	rotMat = mat4.create();
-	transMat = mat4.create();
-	modelMatrix = mat4.create();
-	modelViewMatrix = mat4.create();
-	normalMatrix = mat3.create();
-	meshes: render.Mesh[];
-	texture: render.Texture;
+class Renderable {
+	constructor(public mesh: render.Mesh, public material: world.StdMaterialInstance) {}
+}
 
-	constructor(...meshes: render.Mesh[]) {
-		this.meshes = meshes;
-		this.texture = null;
+
+function makeSimpleMaterial(texture: render.Texture): world.StdMaterialInstance {
+	var desc = world.makeStdMaterialDescriptor();
+	if (texture) {
+		desc.albedoMap = texture;
 	}
-	
-	draw(camera: Camera, meshIndex: number) {
-		this.meshes[meshIndex].draw(this.texture);
+	return state.scene.stdMaterialMgr.create(desc);
+}
+
+
+class Model {
+	entities: world.EntityInfo[] = [];
+	curIndex = 0;
+
+	constructor(...renderables: Renderable[]) {
+		assert(renderables.length > 0, "must have some things to show for a Model");
+
+		for (const r of renderables) {
+			this.entities.push(state.scene.makeEntity({
+				model: {
+					mesh: r.mesh,
+					materials: [r.material]
+				}
+			}));
+		}
+
+		this.setActiveIndex(0);
+	}
+
+	setActiveIndex(index: number) {
+		for (var i = 0; i < this.entities.length; ++i) {
+			state.scene.stdModelMgr.setEnabled(this.entities[i].model, i == index);
+		}
 	}
 
 	setUniformScale(s: number) {
-		mat4.fromScaling(this.scaleMat, [s, s, s]);
+		for (var e of this.entities) {
+			state.scene.transformMgr.setScale(e.transform, [s, s, s]);
+		}
 	}
 
 	setScale(sx: number, sy: number, sz: number) {
-		mat4.fromScaling(this.scaleMat, [sx, sy, sz]);
+		for (var e of this.entities) {
+			state.scene.transformMgr.setScale(e.transform, [sx, sy, sz]);
+		}
 	}
 
 	setPosition(v3: sd.Float3) {
-		mat4.fromTranslation(this.transMat, v3);
+		for (var e of this.entities) {
+			state.scene.transformMgr.setPosition(e.transform, v3);
+		}
 	}
 
 	setRotation(axis: sd.Float3, angle: number) {
-		mat4.fromRotation(this.rotMat, angle, axis);
+		for (var e of this.entities) {
+			state.scene.transformMgr.setRotation(e.transform, quat.setAxisAngle([], axis, angle));
+		}
 	}
 }
 
@@ -396,8 +424,8 @@ class Key {
 
 	
 	constructor(public index: number) {
-		this.keyModel = new Model(state.meshes["key"]);
-		this.lockModel = new Model(state.meshes["lock"]);
+		this.keyModel = new Model({ mesh: state.meshes["key"], material: null });
+		this.lockModel = new Model({ mesh: state.meshes["lock"], material: null });
 
 		this.keyModel.setUniformScale(1);
 		this.lockModel.setUniformScale(0.02);
