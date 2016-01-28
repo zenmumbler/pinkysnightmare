@@ -32,8 +32,8 @@
 <body>
 <div style="width: 960px; height: 540px; margin: 150px auto 50px auto; position: relative;">
 	<canvas style="position: absolute; z-index: 3" width="960" height="540" id="stage"></canvas>
-	<div id="run" style="position: absolute; z-index: 2; width: 100%; height: 100%; background: transparent url(title.png) no-repeat 0 0;"></div>	
-	<div id="victory" style="position: absolute; z-index: 1; width: 100%; height: 100%; background: transparent url(victory.png) no-repeat 0 0;">
+	<div id="run" style="position: absolute; z-index: 2; width: 100%; height: 100%; background: transparent url(data/title.png) no-repeat 0 0;"></div>	
+	<div id="victory" style="position: absolute; z-index: 1; width: 100%; height: 100%; background: transparent url(data/victory.png) no-repeat 0 0;">
 		<p style="position: absolute; top: 300px; left: 0; right: 0; text-align: center; height: 40px; font-size: 40px">
 			You took <span id="minutes">0</span> minutes and <span id="seconds">0</span> seconds to win.
 		</p>
@@ -45,8 +45,9 @@
 	<!-- <p><button id="fullscreen">Fullscreen</button></p> -->
 	<p>&nbsp;</p>
 	<p>
-		&copy; 2015 by Arthur Langereis (<a href="https://twitter.com/zenmumbler/">@zenmumbler</a>)<br>
-		An entry for <a href="http://ludumdare.com/compo/ludum-dare-33/?action=preview&uid=17143">Ludum Dare 33 (You are the Monster)</a>
+		&copy; 2015-6 by Arthur Langereis (<a href="https://twitter.com/zenmumbler/">@zenmumbler</a>)<br>
+		An entry for <a href="http://ludumdare.com/compo/ludum-dare-33/?action=preview&uid=17143">Ludum Dare 33 (You are the Monster)</a><br>
+		Updated to use <a href="http://stardazed.club/">Stardazed TX</a> in January 2016.
 	</p>
 	<p>
 		Pac-Man&reg;, Pinky&reg; and the Pac-Man&reg; field and all related visuals are &copy; Bandai-Namco Entertaiment
@@ -57,116 +58,10 @@
 	<p class="attrib">Key model by `senjen` from <a href="http://www.models-resource.com/pc_computer/zelda2fps/model/5369/">The Models Resource</a></p>
 </div>
 
-<script>
-function seq(t) { return (Array.isArray(t)) ? t : [t]; }
-function $n(sel,base) { return Array.prototype.slice.call((base||document).querySelectorAll(sel), 0); }
-function $(sel,base) { return (typeof(sel) == 'string') ? $n(sel,base) : seq(sel); }
-function $1(sel,base) { return $(sel,base)[0]; }
-
-function on(target, evt, handler) { $(target).forEach(function(tgt) { tgt.addEventListener(evt, handler, false); }); }
-function show(sel,disp) { $(sel).forEach(function(el){ el.style.display = disp||"block" }); }
-function hide(sel) { $(sel).forEach(function(el){ el.style.display = "none" }); }
-
-function assert(cond, msg) {
-	if (! cond) {
-		throw new Error(msg || "assertion failed");
-	}
-}
-</script>
-<script src="gl-matrix-min.js"></script>
-<script src="objloader.js"></script>
-<script src="levelgen.js"></script>
-<script src="pinkydream.js"></script>
-
-
-<script id="standardVert" type="x-shader/x-vertex">
-	attribute vec3 vertexPos_model;
-	attribute vec3 vertexColor;
-	attribute vec3 vertexNormal;
-
-	uniform mat4 modelViewMatrix;
-	uniform mat4 projectionMatrix;
-	uniform mat3 normalMatrix;
-
-	varying vec3 vertexPos_cam_intp;
-	varying vec3 vertexColor_intp;
-	varying vec3 vertexNormal_intp;
-
-	void main(void) {
-		gl_Position = projectionMatrix * modelViewMatrix * vec4(vertexPos_model, 1.0);
-		vertexPos_cam_intp = (modelViewMatrix * vec4(vertexPos_model, 1.0)).xyz;
-		vertexColor_intp = vertexColor;
-		vertexNormal_intp = normalize(normalMatrix * vertexNormal);
-	}
-</script>
-
-<script id="standardFrag" type="x-shader/x-fragment">
-	precision mediump float;
-
-	varying vec3 vertexPos_cam_intp;
-	varying vec3 vertexColor_intp;
-
-	uniform float currentTime;
-
-	void main(void) {
-		vec3 fogColor = vec3(0.1, 0.0, 0.05);
-		
-		const float fogDistance = 8.0;
-		float fogDensity = clamp((length(vertexPos_cam_intp) - fogDistance) / 32.0, 0.0, 0.95);
-		vec3 outColor = vec3(mix(vertexColor_intp, fogColor, fogDensity));
-
-		gl_FragColor = vec4(outColor, 1.0);
-	}
-</script>
-
-
-<script id="texturedVert" type="x-shader/x-vertex">
-	attribute vec3 vertexPos_model;
-	attribute vec3 vertexColor;
-	attribute vec3 vertexNormal;
-	attribute vec2 vertexUV;
-
-	uniform mat4 modelViewMatrix;
-	uniform mat4 projectionMatrix;
-	uniform mat3 normalMatrix;
-	
-	varying vec3 vertexPos_cam_intp;
-	varying vec3 vertexColor_intp;
-	varying vec3 vertexNormal_intp;
-	varying vec2 vertexUV_intp;
-
-	void main(void) {
-		gl_Position = projectionMatrix * modelViewMatrix * vec4(vertexPos_model, 1.0);
-		vertexPos_cam_intp = (modelViewMatrix * vec4(vertexPos_model, 1.0)).xyz;
-		vertexColor_intp = vertexColor;
-		vertexNormal_intp = normalize(normalMatrix * vertexNormal);
-		vertexUV_intp = vertexUV;
-	}
-</script>
-
-<script id="texturedFrag" type="x-shader/x-fragment">
-	precision mediump float;
-
-	varying vec3 vertexPos_cam_intp;
-	varying vec3 vertexColor_intp;
-	varying vec2 vertexUV_intp;
-	
-	uniform sampler2D diffuseSampler;
-	uniform float currentTime;
-
-	void main(void) {
-		vec4 fogColor = vec4(0.1, 0.0, 0.05, 1.0);
-		
-		const float fogDistance = 8.0;
-		float fogDensity = clamp((length(vertexPos_cam_intp) - fogDistance) / 32.0, 0.0, 0.95);
-		vec4 texColor = texture2D(diffuseSampler, vertexUV_intp);
-//		vec4 outColor = mix(vec4(vertexColor_intp, 1.0), texColor, 0.1);
-		vec4 outColor = min(vec4(vertexColor_intp, 1.0), texColor);
-//		vec4 outColor = texColor;
-
-		gl_FragColor = mix(outColor, fogColor, fogDensity);
-	}
-</script>
+<script src="../stardazed-tx/ext/gl-matrix-min.js"></script>
+<script src="../stardazed-tx/build/stardazed-tx.js"></script>
+<script src="build/levelgen.js"></script>
+<script src="build/pinkydream.js"></script>
 
 </body>
 </html>
