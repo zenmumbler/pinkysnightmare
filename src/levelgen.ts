@@ -107,7 +107,7 @@ function buildMapFromImageData(rctx: render.RenderContext, pix: ImageData): MapD
 	mapMesh.primaryVertexBuffer.allocate(inuse * 6 * 4);
 	mapMesh.primitiveGroups.push({
 		fromPrimIx: 0,
-		primCount: inuse * 6 * 4,
+		primCount: inuse * 2 * 4,
 		materialIx: 0
 	});
 	vertexes = new mesh.VertexBufferAttributeView(mapMesh.primaryVertexBuffer, mapMesh.primaryVertexBuffer.attrByRole(mesh.VertexAttributeRole.Position)),
@@ -259,7 +259,7 @@ function buildMapFromImageData(rctx: render.RenderContext, pix: ImageData): MapD
 
 
 function genMapMesh(rctx: render.RenderContext, then: (mapData: MapData) => void) {	
-	loadImageData("levelx_.png").then((pix) => {
+	loadImageData("data/levelx_.png").then((pix) => {
 		then(buildMapFromImageData(rctx, pix));
 	});
 }

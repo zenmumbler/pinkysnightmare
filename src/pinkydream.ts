@@ -466,7 +466,7 @@ function makeDoorMesh(rctx: render.RenderContext, cornerColors: sd.Float3[]) {
 	md.indexBuffer = null;
 	md.primitiveGroups.push({
 		fromPrimIx: 0,
-		primCount: 6 * 2,
+		primCount: 4,
 		materialIx: 0
 	});
 	var vb = md.primaryVertexBuffer;
@@ -524,8 +524,7 @@ class Door {
 
 	constructor() {
 		this.mesh = makeDoorMesh(state.rctx, state.cornerColors);
-		this.model = new Model(this.mesh);
-		this.model.texture = state.textures["door"];
+		this.model = new Model({ mesh: this.mesh, material: makeSimpleMaterial(state.textures["door"]) });
 		this.model.setUniformScale(4);
 
 		vec3.scale(this.scaledPos, this.position, LEVEL_SCALE);
@@ -616,7 +615,7 @@ class Player {
 	model: Model;
 	
 	constructor() {
-		this.model = new Model(state.meshes["spookje"]);
+		this.model = new Model({ mesh: state.meshes["spookje"], material: makeSimpleMaterial(null) });
 		this.model.setUniformScale(1);
 	}
 
@@ -739,8 +738,8 @@ class Abomination {
 		this.direction = Abomination.spawnData[index].direction;
 		this.pathPos = vec2.clone(Abomination.spawnData[index].pathPos);
 
-		this.model = new Model(state.meshes["pac1"], state.meshes["pac2"]);
-		this.model.texture = state.textures["crackpac"];
+		var mat = makeSimpleMaterial(state.textures["crackpac"]);
+		this.model = new Model({ mesh: state.meshes["pac1"], material: mat }, { mesh: state.meshes["pac2"], material: mat });
 		this.model.setUniformScale(5);
 	}
 	
@@ -767,7 +766,7 @@ class Abomination {
 					this.pathStep = 0;
 
 					var exits = state.grid.pathExits(this.pathPos, this.direction);
-					var exit = exits[math.intRandom(exits.length)];
+					var exit = exits[math.intRandom(exits.length - 1)];
 					
 					if (exit.dir != this.direction) {
 						this.nextDir = exit.dir;
@@ -808,10 +807,7 @@ class Abomination {
 			state.player.die();
 		}
 
-	}
-
-	draw() {
-		this.model.draw(state.camera, 1 - (this.pathStep & 1));
+		this.model.setActiveIndex(1 - (this.pathStep & 1));
 	}
 }
 
@@ -822,7 +818,7 @@ function drawScene(camera: Camera) {
 	rpd.clearMask = render.ClearMask.ColourDepth;
 
 	render.runRenderPass(state.rctx, rpd, null, (renderPass) => {
-		state.scene.stdModelMgr.draw(this.scene_.stdModelMgr.all(), renderPass, camera, null, world.RenderMode.Forward);
+		state.scene.stdModelMgr.draw(state.scene.stdModelMgr.all(), renderPass, camera, null, world.RenderMode.Forward);
 	});
 }
 
@@ -896,6 +892,17 @@ function init() {
 	state.rctx = rctx;
 	state.scene = new world.Scene(rctx);
 
+	var dirLite = state.scene.makeEntity({
+		light: {
+			type: world.LightType.Directional,
+			ambientIntensity: 1,
+			diffuseIntensity: 0,
+			colour: [1, 1, 1],
+		}
+	});
+	state.scene.lightMgr.setDirection(dirLite.light, [0, -1, 0]);
+	state.scene.stdModelMgr.setFragmentLights([dirLite.light], -1);
+
 	dom.on("#run", "click", function() {
 		dom.hide("#run");
 		dom.hide("#victory");
@@ -908,7 +915,7 @@ function init() {
 
 	genMapMesh(rctx, function(mapData) {
 		state.meshes["map"] = mapData.mesh;
-		state.models["map"] = new Model(mapData.mesh);
+		state.models["map"] = new Model({ mesh: mapData.mesh, material: makeSimpleMaterial(null) });
 
 		state.camera = new Camera(rctx, mapData.cameras);
 		state.grid = new Grid(mapData.gridW, mapData.gridH, mapData.grid, mapData.path);
@@ -945,7 +952,7 @@ function init() {
 			}),
 			render.loadSimpleTexture(rctx, "data/tex2D/crackpac.png", false).then((crackTex) => {
 				state.textures["crackpac"] = crackTex;
-			}),
+			})
 		];
 
 		Promise.all(resources).then(() => {
