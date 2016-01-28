@@ -424,8 +424,8 @@ class Key {
 
 	
 	constructor(public index: number) {
-		this.keyModel = new Model({ mesh: state.meshes["key"], material: null });
-		this.lockModel = new Model({ mesh: state.meshes["lock"], material: null });
+		this.keyModel = new Model({ mesh: state.meshes["key"], material: makeSimpleMaterial(null) });
+		this.lockModel = new Model({ mesh: state.meshes["lock"], material: makeSimpleMaterial(null) });
 
 		this.keyModel.setUniformScale(1);
 		this.lockModel.setUniformScale(0.02);
@@ -449,6 +449,10 @@ class Key {
 		var maxRadius = Math.max(this.radius, state.player.radius);
 		if (vec2.distance(playerPos, myPos) < maxRadius) {
 			this.found = true;
+
+			// disable models
+			this.keyModel.setActiveIndex(-1);
+			this.lockModel.setActiveIndex(-1);
 		}
 
 		if (!this.found) {
