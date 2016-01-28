@@ -62,6 +62,7 @@ function buildMapFromImageData(rctx: render.RenderContext, pix: ImageData): MapD
 		vec3.copy(colors.item(colIx + 3), colB);
 		vec3.copy(colors.item(colIx + 4), colT);
 		vec3.copy(colors.item(colIx + 5), colT);
+		colIx += 6;
 	}
 	
 	const north = [0, 0, -1],        // normals of the sides
