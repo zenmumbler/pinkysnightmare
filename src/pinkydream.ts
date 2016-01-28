@@ -822,7 +822,7 @@ function drawScene(camera: Camera) {
 	rpd.clearMask = render.ClearMask.ColourDepth;
 
 	render.runRenderPass(state.rctx, rpd, null, (renderPass) => {
-		state.scene.stdModelMgr.draw(state.scene.stdModelMgr.all(), renderPass, camera, null, world.RenderMode.Forward);
+		state.scene.stdModelMgr.draw(state.scene.stdModelMgr.all(), renderPass, camera, null, { colour: [0.1, 0.0, 0.05], offset: 8, depth: 32, density: 0.95 }, world.RenderMode.Forward);
 	});
 }
 
