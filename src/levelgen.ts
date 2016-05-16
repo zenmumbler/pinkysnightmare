@@ -46,22 +46,22 @@ function buildMapFromImageData(rctx: render.RenderContext, pix: ImageData): MapD
 
 
 	function vtx(x: number, y: number, z: number) {
-		vec3.set(vertexes.item(vtxIx), x, y, z);
+		vec3.set(vertexes.refItem(vtxIx), x, y, z);
 		++vtxIx;
 	}
 	function nrm6(nrm: sd.Float3) {
 		for (var n = 0; n < 6; ++n) {
-			vec3.copy(normals.item(normIx++), nrm);
+			vec3.copy(normals.refItem(normIx++), nrm);
 		}
 	}
 	function col6(colT: sd.Float3, colB: sd.Float3) {
-		vec3.copy(colors.item(colIx + 0), colT);
-		vec3.copy(colors.item(colIx + 1), colB);
-		vec3.copy(colors.item(colIx + 2), colB);
+		vec3.copy(colors.refItem(colIx + 0), colT);
+		vec3.copy(colors.refItem(colIx + 1), colB);
+		vec3.copy(colors.refItem(colIx + 2), colB);
 
-		vec3.copy(colors.item(colIx + 3), colB);
-		vec3.copy(colors.item(colIx + 4), colT);
-		vec3.copy(colors.item(colIx + 5), colT);
+		vec3.copy(colors.refItem(colIx + 3), colB);
+		vec3.copy(colors.refItem(colIx + 4), colT);
+		vec3.copy(colors.refItem(colIx + 5), colT);
 		colIx += 6;
 	}
 	
@@ -260,7 +260,7 @@ function buildMapFromImageData(rctx: render.RenderContext, pix: ImageData): MapD
 
 
 function genMapMesh(rctx: render.RenderContext, then: (mapData: MapData) => void) {	
-	loadImageData("data/levelx_.png").then((pix) => {
+	asset.loadImageData("data/levelx_.png").then((pix) => {
 		then(buildMapFromImageData(rctx, pix));
 	});
 }

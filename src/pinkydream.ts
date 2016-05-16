@@ -1,6 +1,6 @@
 // Pinky's Nightmare
 // An entry for LD33 Game Jampo — You are the Monster
-// (c) 2015 by Arthur Langereis — @zenmumbler
+// (c) 2015-6 by Arthur Langereis — @zenmumbler
 
 /// <reference path="../../stardazed-tx/build/stardazed-tx.d.ts" />
 
@@ -10,7 +10,8 @@ import world = sd.world;
 import render = sd.render;
 import mesh = sd.mesh;
 import dom = sd.dom;
-
+import asset = sd.asset;
+import audio = sd.audio;
 
 var state = {
 	rctx: <render.RenderContext>null,
@@ -52,7 +53,7 @@ class Renderable {
 function makeSimpleMaterial(texture: render.Texture): world.StdMaterialInstance {
 	var desc = world.makeStdMaterialDescriptor();
 	if (texture) {
-		desc.albedoMap = texture;
+		desc.diffuseMap = texture;
 	}
 	return state.scene.stdMaterialMgr.create(desc);
 }
@@ -63,11 +64,11 @@ class Model {
 	curIndex = 0;
 
 	constructor(...renderables: Renderable[]) {
-		assert(renderables.length > 0, "must have some things to show for a Model");
+		sd.assert(renderables.length > 0, "must have some things to show for a Model");
 
 		for (const r of renderables) {
 			this.entities.push(state.scene.makeEntity({
-				model: {
+				stdModel: {
 					mesh: r.mesh,
 					materials: [r.material]
 				}
@@ -79,7 +80,7 @@ class Model {
 
 	setActiveIndex(index: number) {
 		for (var i = 0; i < this.entities.length; ++i) {
-			state.scene.stdModelMgr.setEnabled(this.entities[i].model, i == index);
+			state.scene.stdModelMgr.setEnabled(this.entities[i].stdModel, i == index);
 		}
 	}
 
@@ -270,7 +271,7 @@ class Grid {
 	
 	pathExits(curPos: sd.Float2, curDir: string) {
 		var x = curPos[0], z = curPos[1], exits: { pos: sd.Float2; dir: string }[] = [];
-		assert(this.pathAt(x, z), "you're not on a path!");
+		sd.assert(this.pathAt(x, z), "you're not on a path!");
 
 		if ((curDir != "south") && this.pathAt(x, z-1))
 			exits.push({ pos: [x, z-1], dir: "north" });
@@ -486,27 +487,27 @@ function makeDoorMesh(rctx: render.RenderContext, cornerColors: sd.Float3[]) {
 		h = 3,
 		za = 0, zb = .5;
 
-	function vtx(x: number, y: number, z: number) { vec3.set(vertexes.item(vi), x, y, z); }
-	function col(c: sd.Float3) { vec3.copy(colors.item(vi), c); }
-	function nrm6(nrm: sd.Float3) { for (var n = 0; n < 6; ++n) vec3.copy(normals.item(ni++), nrm); }
+	function vtx(x: number, y: number, z: number) { vec3.set(vertexes.refItem(vi), x, y, z); }
+	function col(c: sd.Float3) { vec3.copy(colors.refItem(vi), c); }
+	function nrm6(nrm: sd.Float3) { for (var n = 0; n < 6; ++n) vec3.copy(normals.refItem(ni++), nrm); }
 
-	vtx(xb, h, za); col(cornerColors[0]); vec2.set(uvs.item(vi), 0, 0); ++vi;
-	vtx(xb, 0, za); col(cornerColors[2]); vec2.set(uvs.item(vi), 0, 1); ++vi;
-	vtx(xa, 0, za); col(cornerColors[3]); vec2.set(uvs.item(vi), 1, 1); ++vi;
+	vtx(xb, h, za); col(cornerColors[0]); vec2.set(uvs.refItem(vi), 0, 0); ++vi;
+	vtx(xb, 0, za); col(cornerColors[2]); vec2.set(uvs.refItem(vi), 0, 1); ++vi;
+	vtx(xa, 0, za); col(cornerColors[3]); vec2.set(uvs.refItem(vi), 1, 1); ++vi;
 
-	vtx(xa, 0, za); col(cornerColors[3]); vec2.set(uvs.item(vi), 1, 1); ++vi;
-	vtx(xa, h, za); col(cornerColors[1]); vec2.set(uvs.item(vi), 1, 0); ++vi;
-	vtx(xb, h, za); col(cornerColors[0]); vec2.set(uvs.item(vi), 0, 0); ++vi;
+	vtx(xa, 0, za); col(cornerColors[3]); vec2.set(uvs.refItem(vi), 1, 1); ++vi;
+	vtx(xa, h, za); col(cornerColors[1]); vec2.set(uvs.refItem(vi), 1, 0); ++vi;
+	vtx(xb, h, za); col(cornerColors[0]); vec2.set(uvs.refItem(vi), 0, 0); ++vi;
 
 	nrm6([0, 0, -1]);
 
-	vtx(xb, h, zb); col(cornerColors[4]); vec2.set(uvs.item(vi), 0, 0); ++vi;
-	vtx(xb, h, za); col(cornerColors[4]); vec2.set(uvs.item(vi), 0, 0); ++vi;
-	vtx(xa, h, za); col(cornerColors[4]); vec2.set(uvs.item(vi), 0, 0); ++vi;
+	vtx(xb, h, zb); col(cornerColors[4]); vec2.set(uvs.refItem(vi), 0, 0); ++vi;
+	vtx(xb, h, za); col(cornerColors[4]); vec2.set(uvs.refItem(vi), 0, 0); ++vi;
+	vtx(xa, h, za); col(cornerColors[4]); vec2.set(uvs.refItem(vi), 0, 0); ++vi;
 
-	vtx(xa, h, za); col(cornerColors[4]); vec2.set(uvs.item(vi), 0, 0); ++vi;
-	vtx(xa, h, zb); col(cornerColors[4]); vec2.set(uvs.item(vi), 0, 0); ++vi;
-	vtx(xb, h, zb); col(cornerColors[4]); vec2.set(uvs.item(vi), 0, 0); ++vi;
+	vtx(xa, h, za); col(cornerColors[4]); vec2.set(uvs.refItem(vi), 0, 0); ++vi;
+	vtx(xa, h, zb); col(cornerColors[4]); vec2.set(uvs.refItem(vi), 0, 0); ++vi;
+	vtx(xb, h, zb); col(cornerColors[4]); vec2.set(uvs.refItem(vi), 0, 0); ++vi;
 
 	nrm6([0, 1, 0]);
 	
@@ -822,6 +823,10 @@ function drawScene(camera: Camera) {
 	rpd.clearMask = render.ClearMask.ColourDepth;
 
 	render.runRenderPass(state.rctx, rpd, null, (renderPass) => {
+		renderPass.setDepthTest(render.DepthTest.Less);
+		renderPass.setFaceCulling(render.FaceCulling.Back);
+
+		state.scene.stdModelMgr.updateLightData(camera);
 		state.scene.stdModelMgr.draw(state.scene.stdModelMgr.all(), renderPass, camera, null, { colour: [0.1, 0.0, 0.05], offset: 8, depth: 32, density: 0.95 }, world.RenderMode.Forward);
 	});
 }
@@ -891,7 +896,7 @@ function init() {
 	// -- create managers
 	var canvas = <HTMLCanvasElement>document.getElementById("stage");
 	var rctx = render.makeRenderContext(canvas);
-	var sound = new SoundManager();
+	var sound = audio.makeAudioContext();
 
 	state.rctx = rctx;
 	state.scene = new world.Scene(rctx);
@@ -905,7 +910,7 @@ function init() {
 		}
 	});
 	state.scene.lightMgr.setDirection(dirLite.light, [0, -1, 0]);
-	state.scene.stdModelMgr.setFragmentLights([dirLite.light], -1);
+	state.scene.stdModelMgr.setActiveLights([dirLite.light], -1);
 
 	dom.on("#run", "click", function() {
 		dom.hide("#run");
@@ -926,27 +931,27 @@ function init() {
 		state.cornerColors = mapData.cornerColors;
 
 		var resources = [
-			mesh.loadLWObjectFile("data/models/pac1.obj").then((pac1Obj) => {
+			asset.loadLWObjectFile("data/models/pac1.obj", true).then((pac1Obj) => {
 				var md = render.makeMeshDescriptor(pac1Obj.mesh);
 				md.primitiveType = mesh.PrimitiveType.Triangle;
 				state.meshes["pac1"] = new render.Mesh(rctx, md);
 			}),
-			mesh.loadLWObjectFile("data/models/pac2.obj").then((pac2Obj) => {
+			asset.loadLWObjectFile("data/models/pac2.obj", true).then((pac2Obj) => {
 				var md = render.makeMeshDescriptor(pac2Obj.mesh);
 				md.primitiveType = mesh.PrimitiveType.Triangle;
 				state.meshes["pac2"] = new render.Mesh(rctx, md);
 			}),
-			mesh.loadLWObjectFile("data/models/key.obj").then((keyObj) => {
+			asset.loadLWObjectFile("data/models/key.obj", true).then((keyObj) => {
 				var md = render.makeMeshDescriptor(keyObj.mesh);
 				md.primitiveType = mesh.PrimitiveType.Triangle;
 				state.meshes["key"] = new render.Mesh(rctx, md);
 			}),
-			mesh.loadLWObjectFile("data/models/lock.obj").then((lockObj) => {
+			asset.loadLWObjectFile("data/models/lock.obj", true).then((lockObj) => {
 				var md = render.makeMeshDescriptor(lockObj.mesh);
 				md.primitiveType = mesh.PrimitiveType.Triangle;
 				state.meshes["lock"] = new render.Mesh(rctx, md);
 			}),
-			mesh.loadLWObjectFile("data/models/spookje.obj").then((spookjeObj) => {
+			asset.loadLWObjectFile("data/models/spookje.obj", true).then((spookjeObj) => {
 				var md = render.makeMeshDescriptor(spookjeObj.mesh);
 				md.primitiveType = mesh.PrimitiveType.Triangle;
 				state.meshes["spookje"] = new render.Mesh(rctx, md);
