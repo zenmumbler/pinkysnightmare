@@ -116,7 +116,7 @@ class Camera {
 	projectionMatrix: sd.Float4x4;
 	viewMatrix: sd.Float4x4;
 
-	constructor(private rctx: render.RenderContext, private fixedPoints: CameraMarker[]) {
+	constructor(rctx: render.RenderContext, private fixedPoints: CameraMarker[]) {
 		this.w = rctx.gl.drawingBufferWidth;
 		this.h = rctx.gl.drawingBufferHeight;
 
@@ -166,7 +166,6 @@ class Camera {
 		}
 
 		// place eye at worldspace of cam and treat the viewpoint looking at the home door as a fixed camera
-		var doorCameraLoc = [28,23];
 		var camY = bestCam.doorCam ? 6 : 5;
 		var camPos = vec3.fromValues(bestCam[0], camY, bestCam[1]);
 		vec3.scale(camPos, camPos, LEVEL_SCALE);
@@ -313,7 +312,6 @@ class Grid {
 		//length of ray from one x or y-side to next x or y-side
 		var deltaDistX = Math.sqrt(1 + (rayDirY * rayDirY) / (rayDirX * rayDirX));
 		var deltaDistY = Math.sqrt(1 + (rayDirX * rayDirX) / (rayDirY * rayDirY));
-		var perpWallDist: number;
 
 		//what direction to step in x or y-direction (either +1 or -1)
 		var stepX: number, stepY: number;
@@ -440,7 +438,7 @@ class Key {
 		this.lockModel.setPosition(this.scaledPos);
 	}
 
-	update(dt: number) {
+	update(_dt: number) {
 		if (this.found)
 			return;
 
@@ -541,7 +539,7 @@ class Door {
 		state.grid.set(29, 27, true);
 	}
 
-	update(dt: number) {
+	update(_dt: number) {
 		if (this.state == "closed") {
 			var allKeys = state.keyItems.every(function(key) { return key.found; });
 
@@ -583,7 +581,7 @@ class End {
 	constructor() {
 	}
 
-	update(dt: number) {
+	update(_dt: number) {
 		var playerPos = vec2.fromValues(state.player.position[0], state.player.position[2]);
 		if (vec2.distance(playerPos, this.position) < this.radius) {
 			this.T = state.tCur;
@@ -749,7 +747,7 @@ class Abomination {
 	}
 	
 
-	update(dt: number) {
+	update(_dt: number) {
 		if (this.phase == "move") {
 			if (state.tCur - this.lastStepT > this.stepDuration) {
 				this.pathStep++;
@@ -896,7 +894,6 @@ function init() {
 	// -- create managers
 	var canvas = <HTMLCanvasElement>document.getElementById("stage");
 	var rctx = render.makeRenderContext(canvas);
-	var sound = audio.makeAudioContext();
 
 	state.rctx = rctx;
 	state.scene = new world.Scene(rctx);
