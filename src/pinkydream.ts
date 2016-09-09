@@ -932,28 +932,23 @@ function init() {
 
 		var resources = [
 			asset.loadLWObjectFile("data/models/pac1.obj", true).then((pac1Obj) => {
-				var md = render.makeMeshDescriptor(pac1Obj.mesh);
-				md.primitiveType = mesh.PrimitiveType.Triangle;
+				var md = render.makeMeshDescriptor(pac1Obj.meshes[0].meshData);
 				state.meshes["pac1"] = new render.Mesh(rctx, md);
 			}),
 			asset.loadLWObjectFile("data/models/pac2.obj", true).then((pac2Obj) => {
-				var md = render.makeMeshDescriptor(pac2Obj.mesh);
-				md.primitiveType = mesh.PrimitiveType.Triangle;
+				var md = render.makeMeshDescriptor(pac2Obj.meshes[0].meshData);
 				state.meshes["pac2"] = new render.Mesh(rctx, md);
 			}),
 			asset.loadLWObjectFile("data/models/key.obj", true).then((keyObj) => {
-				var md = render.makeMeshDescriptor(keyObj.mesh);
-				md.primitiveType = mesh.PrimitiveType.Triangle;
+				var md = render.makeMeshDescriptor(keyObj.meshes[0].meshData);
 				state.meshes["key"] = new render.Mesh(rctx, md);
 			}),
 			asset.loadLWObjectFile("data/models/lock.obj", true).then((lockObj) => {
-				var md = render.makeMeshDescriptor(lockObj.mesh);
-				md.primitiveType = mesh.PrimitiveType.Triangle;
+				var md = render.makeMeshDescriptor(lockObj.meshes[0].meshData);
 				state.meshes["lock"] = new render.Mesh(rctx, md);
 			}),
 			asset.loadLWObjectFile("data/models/spookje.obj", true).then((spookjeObj) => {
-				var md = render.makeMeshDescriptor(spookjeObj.mesh);
-				md.primitiveType = mesh.PrimitiveType.Triangle;
+				var md = render.makeMeshDescriptor(spookjeObj.meshes[0].meshData);
 				state.meshes["spookje"] = new render.Mesh(rctx, md);
 			}),
 			render.loadSimpleTexture(rctx, "data/tex2D/doortex.png", false).then((doorTex) => {
