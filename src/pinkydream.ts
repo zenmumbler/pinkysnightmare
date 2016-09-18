@@ -8,7 +8,7 @@ import io = sd.io;
 import math = sd.math;
 import world = sd.world;
 import render = sd.render;
-import mesh = sd.mesh;
+import meshdata = sd.meshdata;
 import dom = sd.dom;
 import asset = sd.asset;
 import audio = sd.audio;
@@ -465,7 +465,7 @@ class Key {
 
 
 function makeDoorMesh(rctx: render.RenderContext, cornerColors: sd.Float3[]) {
-	var md = new mesh.MeshData(mesh.AttrList.Pos3Norm3Colour3UV2());
+	var md = new meshdata.MeshData(meshdata.AttrList.Pos3Norm3Colour3UV2());
 	md.indexBuffer = null;
 	md.primitiveGroups.push({
 		fromPrimIx: 0,
@@ -474,10 +474,10 @@ function makeDoorMesh(rctx: render.RenderContext, cornerColors: sd.Float3[]) {
 	});
 	var vb = md.primaryVertexBuffer;
 	vb.allocate(6 * 2);
-	var vertexes = new mesh.VertexBufferAttributeView(vb, vb.attrByRole(mesh.VertexAttributeRole.Position));
-	var normals = new mesh.VertexBufferAttributeView(vb, vb.attrByRole(mesh.VertexAttributeRole.Normal));
-	var colors = new mesh.VertexBufferAttributeView(vb, vb.attrByRole(mesh.VertexAttributeRole.Colour));
-	var uvs = new mesh.VertexBufferAttributeView(vb, vb.attrByRole(mesh.VertexAttributeRole.UV));
+	var vertexes = new meshdata.VertexBufferAttributeView(vb, vb.attrByRole(meshdata.VertexAttributeRole.Position));
+	var normals = new meshdata.VertexBufferAttributeView(vb, vb.attrByRole(meshdata.VertexAttributeRole.Normal));
+	var colors = new meshdata.VertexBufferAttributeView(vb, vb.attrByRole(meshdata.VertexAttributeRole.Colour));
+	var uvs = new meshdata.VertexBufferAttributeView(vb, vb.attrByRole(meshdata.VertexAttributeRole.UV));
 
 	var vi = 0, ni = 0;
 
@@ -510,7 +510,7 @@ function makeDoorMesh(rctx: render.RenderContext, cornerColors: sd.Float3[]) {
 	nrm6([0, 1, 0]);
 	
 	var rdesc = render.makeMeshDescriptor(md);
-	rdesc.primitiveType = mesh.PrimitiveType.Triangle;
+	rdesc.primitiveType = meshdata.PrimitiveType.Triangle;
 
 	return new render.Mesh(rctx, rdesc);
 }
@@ -928,30 +928,30 @@ function init() {
 		state.cornerColors = mapData.cornerColors;
 
 		var resources = [
-			asset.loadLWObjectFile("data/models/pac1.obj", true).then((pac1Obj) => {
+			asset.loadOBJFile("data/models/pac1.obj", true).then(pac1Obj => {
 				var md = render.makeMeshDescriptor(pac1Obj.meshes[0].meshData);
 				state.meshes["pac1"] = new render.Mesh(rctx, md);
 			}),
-			asset.loadLWObjectFile("data/models/pac2.obj", true).then((pac2Obj) => {
+			asset.loadOBJFile("data/models/pac2.obj", true).then(pac2Obj => {
 				var md = render.makeMeshDescriptor(pac2Obj.meshes[0].meshData);
 				state.meshes["pac2"] = new render.Mesh(rctx, md);
 			}),
-			asset.loadLWObjectFile("data/models/key.obj", true).then((keyObj) => {
+			asset.loadOBJFile("data/models/key.obj", true).then(keyObj => {
 				var md = render.makeMeshDescriptor(keyObj.meshes[0].meshData);
 				state.meshes["key"] = new render.Mesh(rctx, md);
 			}),
-			asset.loadLWObjectFile("data/models/lock.obj", true).then((lockObj) => {
+			asset.loadOBJFile("data/models/lock.obj", true).then(lockObj => {
 				var md = render.makeMeshDescriptor(lockObj.meshes[0].meshData);
 				state.meshes["lock"] = new render.Mesh(rctx, md);
 			}),
-			asset.loadLWObjectFile("data/models/spookje.obj", true).then((spookjeObj) => {
+			asset.loadOBJFile("data/models/spookje.obj", true).then(spookjeObj => {
 				var md = render.makeMeshDescriptor(spookjeObj.meshes[0].meshData);
 				state.meshes["spookje"] = new render.Mesh(rctx, md);
 			}),
-			render.loadSimpleTexture(rctx, "data/tex2D/doortex.png", false).then((doorTex) => {
+			render.loadSimpleTexture(rctx, "data/tex2D/doortex.png", false).then(doorTex => {
 				state.textures["door"] = doorTex;
 			}),
-			render.loadSimpleTexture(rctx, "data/tex2D/crackpac.png", false).then((crackTex) => {
+			render.loadSimpleTexture(rctx, "data/tex2D/crackpac.png", false).then(crackTex => {
 				state.textures["crackpac"] = crackTex;
 			})
 		];

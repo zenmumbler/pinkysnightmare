@@ -29,14 +29,14 @@ interface MapData {
 function buildMapFromImageData(rctx: render.RenderContext, pix: ImageData): MapData {
 	var inuse = 0, pixw = pix.width, pixh = pix.height;
 	var data = pix.data, offset = 0, gridOffset = 0;
-	var mapMesh = new mesh.MeshData(mesh.AttrList.Pos3Norm3Colour3());
+	var mapMesh = new meshdata.MeshData(meshdata.AttrList.Pos3Norm3Colour3());
 	mapMesh.indexBuffer = null;
 
 	const HEIGHT = 25.0;       // will appear inf high
 	
-	var vertexes: mesh.VertexBufferAttributeView,
-		normals: mesh.VertexBufferAttributeView,
-		colors: mesh.VertexBufferAttributeView,
+	var vertexes: meshdata.VertexBufferAttributeView,
+		normals: meshdata.VertexBufferAttributeView,
+		colors: meshdata.VertexBufferAttributeView,
 		vtxIx = 0,
 		normIx = 0,
 		colIx = 0,
@@ -111,9 +111,9 @@ function buildMapFromImageData(rctx: render.RenderContext, pix: ImageData): MapD
 		primCount: inuse * 2 * 4,
 		materialIx: 0
 	});
-	vertexes = new mesh.VertexBufferAttributeView(mapMesh.primaryVertexBuffer, mapMesh.primaryVertexBuffer.attrByRole(mesh.VertexAttributeRole.Position)),
-	normals = new mesh.VertexBufferAttributeView(mapMesh.primaryVertexBuffer, mapMesh.primaryVertexBuffer.attrByRole(mesh.VertexAttributeRole.Normal)),
-	colors = new mesh.VertexBufferAttributeView(mapMesh.primaryVertexBuffer, mapMesh.primaryVertexBuffer.attrByRole(mesh.VertexAttributeRole.Colour)),
+	vertexes = new meshdata.VertexBufferAttributeView(mapMesh.primaryVertexBuffer, mapMesh.primaryVertexBuffer.attrByRole(meshdata.VertexAttributeRole.Position)),
+	normals = new meshdata.VertexBufferAttributeView(mapMesh.primaryVertexBuffer, mapMesh.primaryVertexBuffer.attrByRole(meshdata.VertexAttributeRole.Normal)),
+	colors = new meshdata.VertexBufferAttributeView(mapMesh.primaryVertexBuffer, mapMesh.primaryVertexBuffer.attrByRole(meshdata.VertexAttributeRole.Colour)),
 
 	// create walls and populate logic grids
 	offset = 0;
@@ -242,7 +242,7 @@ function buildMapFromImageData(rctx: render.RenderContext, pix: ImageData): MapD
 	}
 
 	var rdesc = render.makeMeshDescriptor(mapMesh);
-	rdesc.primitiveType = mesh.PrimitiveType.Triangle;
+	rdesc.primitiveType = meshdata.PrimitiveType.Triangle;
 
 	console.info("map inuse", inuse);
 	console.info("vtx", vertexes.count, "cams", cameras.length);
