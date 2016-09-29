@@ -11,7 +11,6 @@ import render = sd.render;
 import meshdata = sd.meshdata;
 import dom = sd.dom;
 import asset = sd.asset;
-import audio = sd.audio;
 
 var state = {
 	rctx: <render.RenderContext>null,
