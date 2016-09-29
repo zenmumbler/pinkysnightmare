@@ -27,7 +27,7 @@ var state = {
 	end: <End>null,
 	grid: <Grid>null,
 
-	meshes: <{ [index: string]: render.Mesh }>{},
+	meshes: <{ [index: string]: world.MeshInstance }>{},
 	textures: <{ [index: string]: render.Texture }>{},
 	models: <{ [index: string]: Model }>{},
 
@@ -46,16 +46,16 @@ function u8Color(r: number, g: number, b: number): ArrayOfNumber {
 
 
 class Renderable {
-	constructor(public mesh: render.Mesh, public material: world.StdMaterialInstance) {}
+	constructor(public mesh: world.MeshInstance, public material: asset.Material) {}
 }
 
 
-function makeSimpleMaterial(texture: render.Texture): world.StdMaterialInstance {
-	var desc = world.makeStdMaterialDescriptor();
+function makeSimpleMaterial(texture: render.Texture): asset.Material {
+	const mat = asset.makeMaterial("");
 	if (texture) {
-		desc.diffuseMap = texture;
+		mat.albedoTexture = { name: "tex", texture: texture };
 	}
-	return state.scene.stdMaterialMgr.create(desc);
+	return mat;
 }
 
 
@@ -68,10 +68,8 @@ class Model {
 
 		for (const r of renderables) {
 			this.entities.push(state.scene.makeEntity({
-				stdModel: {
-					mesh: r.mesh,
-					materials: [r.material]
-				}
+				mesh: r.mesh,
+				stdModel: { materials: [r.material] }
 			}));
 		}
 
@@ -464,15 +462,16 @@ class Key {
 }
 
 
-function makeDoorMesh(rctx: render.RenderContext, cornerColors: sd.Float3[]) {
-	var md = new meshdata.MeshData(meshdata.AttrList.Pos3Norm3Colour3UV2());
-	md.indexBuffer = null;
+function makeDoorMesh(cornerColors: sd.Float3[]) {
+	var md = new meshdata.MeshData();
+	var vb = new meshdata.VertexBuffer(meshdata.AttrList.Pos3Norm3Colour3UV2());
+	md.vertexBuffers.push(vb);
 	md.primitiveGroups.push({
-		fromPrimIx: 0,
-		primCount: 4,
+		type: meshdata.PrimitiveType.Triangle,
+		fromElement: 0,
+		elementCount: 4 * 3,
 		materialIx: 0
 	});
-	var vb = md.primaryVertexBuffer;
 	vb.allocate(6 * 2);
 	var vertexes = new meshdata.VertexBufferAttributeView(vb, vb.attrByRole(meshdata.VertexAttributeRole.Position));
 	var normals = new meshdata.VertexBufferAttributeView(vb, vb.attrByRole(meshdata.VertexAttributeRole.Normal));
@@ -509,24 +508,21 @@ function makeDoorMesh(rctx: render.RenderContext, cornerColors: sd.Float3[]) {
 
 	nrm6([0, 1, 0]);
 	
-	var rdesc = render.makeMeshDescriptor(md);
-	rdesc.primitiveType = meshdata.PrimitiveType.Triangle;
-
-	return new render.Mesh(rctx, rdesc);
+	return state.scene.meshMgr.create(md);
 }
 
 
 class Door {
 	state = "closed";
 	position = vec3.fromValues(28.5, 0, 27);
-	mesh: render.Mesh;
+	mesh: world.MeshInstance;
 	model: Model;
 	openT0 = 0;
 
 	private scaledPos = vec3.create();
 
 	constructor() {
-		this.mesh = makeDoorMesh(state.rctx, state.cornerColors);
+		this.mesh = makeDoorMesh(state.cornerColors);
 		this.model = new Model({ mesh: this.mesh, material: makeSimpleMaterial(state.textures["door"]) });
 		this.model.setUniformScale(4);
 
@@ -820,7 +816,7 @@ function drawScene(camera: Camera) {
 	vec4.set(rpd.clearColour, 0.1, 0.0, 0.05, 1);
 	rpd.clearMask = render.ClearMask.ColourDepth;
 
-	render.runRenderPass(state.rctx, rpd, null, (renderPass) => {
+	render.runRenderPass(state.rctx, state.scene.meshMgr, rpd, null, (renderPass) => {
 		renderPass.setDepthTest(render.DepthTest.Less);
 		renderPass.setFaceCulling(render.FaceCulling.Back);
 
@@ -919,9 +915,9 @@ function init() {
 		location.reload();
 	});
 
-	genMapMesh(rctx, function(mapData) {
-		state.meshes["map"] = mapData.mesh;
-		state.models["map"] = new Model({ mesh: mapData.mesh, material: makeSimpleMaterial(null) });
+	genMapMesh().then(mapData => {
+		state.meshes["map"] = state.scene.meshMgr.create(mapData.meshData);
+		state.models["map"] = new Model({ mesh: state.meshes["map"], material: makeSimpleMaterial(null) });
 
 		state.camera = new Camera(rctx, mapData.cameras);
 		state.grid = new Grid(mapData.gridW, mapData.gridH, mapData.grid, mapData.path);
@@ -929,24 +925,19 @@ function init() {
 
 		var resources = [
 			asset.loadOBJFile("data/models/pac1.obj", true).then(pac1Obj => {
-				var md = render.makeMeshDescriptor(pac1Obj.meshes[0].meshData);
-				state.meshes["pac1"] = new render.Mesh(rctx, md);
+				state.meshes["pac1"] = state.scene.meshMgr.create(pac1Obj.meshes[0].meshData);
 			}),
 			asset.loadOBJFile("data/models/pac2.obj", true).then(pac2Obj => {
-				var md = render.makeMeshDescriptor(pac2Obj.meshes[0].meshData);
-				state.meshes["pac2"] = new render.Mesh(rctx, md);
+				state.meshes["pac2"] = state.scene.meshMgr.create(pac2Obj.meshes[0].meshData);
 			}),
 			asset.loadOBJFile("data/models/key.obj", true).then(keyObj => {
-				var md = render.makeMeshDescriptor(keyObj.meshes[0].meshData);
-				state.meshes["key"] = new render.Mesh(rctx, md);
+				state.meshes["key"] = state.scene.meshMgr.create(keyObj.meshes[0].meshData);
 			}),
 			asset.loadOBJFile("data/models/lock.obj", true).then(lockObj => {
-				var md = render.makeMeshDescriptor(lockObj.meshes[0].meshData);
-				state.meshes["lock"] = new render.Mesh(rctx, md);
+				state.meshes["lock"] = state.scene.meshMgr.create(lockObj.meshes[0].meshData);
 			}),
 			asset.loadOBJFile("data/models/spookje.obj", true).then(spookjeObj => {
-				var md = render.makeMeshDescriptor(spookjeObj.meshes[0].meshData);
-				state.meshes["spookje"] = new render.Mesh(rctx, md);
+				state.meshes["spookje"] = state.scene.meshMgr.create(spookjeObj.meshes[0].meshData);
 			}),
 			render.loadSimpleTexture(rctx, "data/tex2D/doortex.png", false).then(doorTex => {
 				state.textures["door"] = doorTex;
@@ -959,7 +950,7 @@ function init() {
 		Promise.all(resources).then(() => {
 			showTitle();
 		});
-	}); // map
+	});
 }
 
 dom.on(window, "load", init);

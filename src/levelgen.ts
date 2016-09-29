@@ -21,16 +21,15 @@ interface MapData {
 	path: boolean[];
 	gridW: number;
 	gridH: number;
-	mesh: render.Mesh;
+	meshData: meshdata.MeshData;
 	cornerColors: sd.Float3[];
 }
 
 
-function buildMapFromImageData(rctx: render.RenderContext, pix: ImageData): MapData {
+function buildMapFromImageData(pix: ImageData): MapData {
 	var inuse = 0, pixw = pix.width, pixh = pix.height;
 	var data = pix.data, offset = 0, gridOffset = 0;
-	var mapMesh = new meshdata.MeshData(meshdata.AttrList.Pos3Norm3Colour3());
-	mapMesh.indexBuffer = null;
+	var mapMesh = new meshdata.MeshData();
 
 	const HEIGHT = 25.0;       // will appear inf high
 	
@@ -105,15 +104,18 @@ function buildMapFromImageData(rctx: render.RenderContext, pix: ImageData): MapD
 		}
 	}
 
-	mapMesh.primaryVertexBuffer.allocate(inuse * 6 * 4);
+	const vb = new meshdata.VertexBuffer(meshdata.AttrList.Pos3Norm3Colour3());
+	vb.allocate(inuse * 6 * 4);
+	mapMesh.vertexBuffers.push(vb);
 	mapMesh.primitiveGroups.push({
-		fromPrimIx: 0,
-		primCount: inuse * 2 * 4,
+		type: meshdata.PrimitiveType.Triangle,
+		fromElement: 0,
+		elementCount: inuse * 2 * 4 * 3, // 2 tris per 4 sides * 3 components
 		materialIx: 0
 	});
-	vertexes = new meshdata.VertexBufferAttributeView(mapMesh.primaryVertexBuffer, mapMesh.primaryVertexBuffer.attrByRole(meshdata.VertexAttributeRole.Position)),
-	normals = new meshdata.VertexBufferAttributeView(mapMesh.primaryVertexBuffer, mapMesh.primaryVertexBuffer.attrByRole(meshdata.VertexAttributeRole.Normal)),
-	colors = new meshdata.VertexBufferAttributeView(mapMesh.primaryVertexBuffer, mapMesh.primaryVertexBuffer.attrByRole(meshdata.VertexAttributeRole.Colour)),
+	vertexes = new meshdata.VertexBufferAttributeView(vb, vb.attrByRole(meshdata.VertexAttributeRole.Position)),
+	normals = new meshdata.VertexBufferAttributeView(vb, vb.attrByRole(meshdata.VertexAttributeRole.Normal)),
+	colors = new meshdata.VertexBufferAttributeView(vb, vb.attrByRole(meshdata.VertexAttributeRole.Colour)),
 
 	// create walls and populate logic grids
 	offset = 0;
@@ -241,9 +243,6 @@ function buildMapFromImageData(rctx: render.RenderContext, pix: ImageData): MapD
 		}
 	}
 
-	var rdesc = render.makeMeshDescriptor(mapMesh);
-	rdesc.primitiveType = meshdata.PrimitiveType.Triangle;
-
 	console.info("map inuse", inuse);
 	console.info("vtx", vertexes.count, "cams", cameras.length);
 
@@ -253,14 +252,12 @@ function buildMapFromImageData(rctx: render.RenderContext, pix: ImageData): MapD
 		path: path,
 		gridW: pixw,
 		gridH: pixh,
-		mesh: new render.Mesh(rctx, rdesc),
+		meshData: mapMesh,
 		cornerColors: cornerColors
 	};
 }
 
 
-function genMapMesh(rctx: render.RenderContext, then: (mapData: MapData) => void) {	
-	asset.loadImageData("data/levelx_.png").then((pix) => {
-		then(buildMapFromImageData(rctx, pix));
-	});
+function genMapMesh() {	
+	return asset.loadImageData("data/levelx_.png").then(buildMapFromImageData);
 }
