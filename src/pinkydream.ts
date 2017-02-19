@@ -2,7 +2,7 @@
 // An entry for LD33 Game Jampo — You are the Monster
 // (c) 2015-6 by Arthur Langereis — @zenmumbler
 
-/// <reference path="../../stardazed-tx/build/stardazed-tx.d.ts" />
+/// <reference path="../../stardazed/build/stardazed.d.ts" />
 
 import io = sd.io;
 import math = sd.math;
