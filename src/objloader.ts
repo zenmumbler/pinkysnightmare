@@ -27,15 +27,16 @@ function loadObj(text: string, then: (d: ObjData) => void) {
 
 		vertexes.push(v[0], v[1], v[2]);
 		normals.push(n[0], n[1], n[2]);
-		if (t)
+		if (t) {
 			uvs.push(t[0], t[1]);
+		}
 	}
 
 	// convert a face index to zero-based int or -1 for empty index
-	function fxtoi(fx: string) {return (+fx) - 1;}
+	function fxtoi(fx: string) { return (+fx) - 1; }
 
-	lines.forEach(function(line) {
-		var tokens = line.split(" ");
+	for (const line of lines) {
+		const tokens = line.split(" ");
 		switch (tokens[0]) {
 			case "v":
 				vv.push([parseFloat(tokens[1]), parseFloat(tokens[2]), parseFloat(tokens[3])]);
@@ -54,10 +55,10 @@ function loadObj(text: string, then: (d: ObjData) => void) {
 
 			default: break;
 		}
-	});
+	}
 
-	var t1 = performance.now();
-	console.info("obj v:", vertexes.length / 3, "n:", normals.length / 3, "t:", uvs.length / 2, "took:", (t1-t0) | 0, "ms");
+	const t1 = performance.now();
+	console.info("obj v:", vertexes.length / 3, "n:", normals.length / 3, "t:", uvs.length / 2, "took:", (t1 - t0) | 0, "ms");
 	then({ elements: vertexes.length / 3, vertexes, normals, uvs });
 }
 
@@ -67,8 +68,8 @@ export function loadObjFile(fileName: string, then: (d: ObjData) => void) {
 	xhr.open("GET", fileName);
 
 	xhr.onreadystatechange = function() {
-		if (xhr.readyState != 4) return;
-		assert(xhr.status == 200 || xhr.status === 0);
+		if (xhr.readyState !== 4) { return; }
+		assert(xhr.status === 200 || xhr.status === 0);
 		loadObj(xhr.responseText, then);
 	};
 	xhr.send();

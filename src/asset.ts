@@ -25,10 +25,10 @@ function getShader(gl: WebGLRenderingContext, id: string) {
 	const shaderScript = document.getElementById(id) as HTMLScriptElement;
 	assert(shaderScript, "no such shader: " + id);
 
-	var shader;
-	if (shaderScript.type == "x-shader/x-fragment") {
+	let shader;
+	if (shaderScript.type === "x-shader/x-fragment") {
 		shader = gl.createShader(gl.FRAGMENT_SHADER)!;
-	} else if (shaderScript.type == "x-shader/x-vertex") {
+	} else if (shaderScript.type === "x-shader/x-vertex") {
 		shader = gl.createShader(gl.VERTEX_SHADER)!;
 	} else {
 		assert(false, id + " does not seem to be a shader");
@@ -98,8 +98,9 @@ export class TriMesh {
 		assert(vertexArray.length % 9 === 0, "vertex array must be a triangle soup"); // 3 vtx * 3 floats
 		assert(normalArray.length === vertexArray.length, "normal array must be same size as vertex array");
 		assert(colorArray.length === vertexArray.length, "color array must be same size as vertex array");
-		if (uvArray)
+		if (uvArray) {
 			assert((uvArray.length / 2) === (vertexArray.length / 3), "each vertex needs a uv");
+		}
 
 		this.vertexBuffer = gl.createBuffer()!;
 		this.normalBuffer = gl.createBuffer()!;

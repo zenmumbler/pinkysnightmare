@@ -8,7 +8,7 @@ import { createStandardProgram, createStandardTexture, TriMesh, u8Color, Standar
 import { LEVEL_SCALE, genMapMesh, CameraPoint } from "./levelgen.js";
 import { loadObjFile } from "./objloader.js";
 
-var gl: WebGLRenderingContext;
+let gl: WebGLRenderingContext;
 
 interface State {
 	t0: number;
@@ -38,7 +38,7 @@ let active = true, mode = "title";
 
 const KEY_UP = 38, KEY_DOWN = 40, KEY_LEFT = 37, KEY_RIGHT = 39,
 	// KEY_SPACE = 32, KEY_RETURN = 13,
-	KEY_W = 'W'.charCodeAt(0), KEY_A = 'A'.charCodeAt(0), KEY_S = 'S'.charCodeAt(0), KEY_D = 'D'.charCodeAt(0);
+	KEY_W = "W".charCodeAt(0), KEY_A = "A".charCodeAt(0), KEY_S = "S".charCodeAt(0), KEY_D = "D".charCodeAt(0);
 	// KEY_K = 'K'.charCodeAt(0);
 
 
@@ -47,8 +47,8 @@ function intRandom(choices: number) {
 }
 
 function genColorArray(color: number[], times: number) {
-	var result = [];
-	for (var n=0; n < times; ++n) {
+	const result = [];
+	for (let n = 0; n < times; ++n) {
 		result.push(color[0], color[1], color[2]);
 	}
 	return result;
@@ -88,7 +88,7 @@ class Model {
 		}
 
 		this.meshes[meshIndex].draw(gl, program, this.texture);
-	};
+	}
 
 	setUniformScale(s: number) {
 		mat4.fromScaling(this.scaleMat, [s, s, s]);
@@ -104,7 +104,7 @@ class Model {
 
 	setRotation(axis: NumArray, angle: number) {
 		mat4.fromRotation(this.rotMat, angle, axis);
-	};
+	}
 }
 
 
@@ -119,9 +119,8 @@ class Camera {
 	fixedPoints!: CameraPoint[];
 
 	constructor(canvas: HTMLCanvasElement) {
-		var w = canvas.width;
-		var h = canvas.height;
-
+		const w = canvas.width;
+		const h = canvas.height;
 		gl.viewport(0, 0, w, h);
 
 		this.projectionMatrix = mat4.create();
@@ -130,29 +129,28 @@ class Camera {
 	}
 
 	pickClosestVantagePoint() {
-		var playerPos = vec2.fromValues(state.player.position[0], state.player.position[2]);
+		const playerPos2D = vec2.fromValues(state.player.position[0], state.player.position[2]);
 
 		// order viewpoints by distance to player
 		this.fixedPoints.sort(function(fpa, fpb) {
-			var distA = vec2.squaredDistance(fpa, playerPos);
-			var distB = vec2.squaredDistance(fpb, playerPos);
+			const distA = vec2.squaredDistance(fpa, playerPos2D);
+			const distB = vec2.squaredDistance(fpb, playerPos2D);
 			return (distA < distB) ? -1 : ((distB < distA) ? 1 : 0);
 		});
 
-		var bestCam = null;
-		var minViewDistSq = 3.5 * 3.5;
-		var temp = vec2.create(), f2p = vec2.create();
+		let bestCam = null;
+		const minViewDistSq = 3.5 * 3.5;
+		const temp = vec2.create(), f2p = vec2.create();
 
-		for (var cx=0; cx < this.fixedPoints.length; ++cx) {
+		for (const camFP of this.fixedPoints) {
 			// from this viewpoint, cast a ray to the player and find the first map wall we hit
-			var camFP = this.fixedPoints[cx];
-			vec2.subtract(temp, playerPos, camFP);
+			vec2.subtract(temp, playerPos2D, camFP);
 			vec2.copy(f2p, temp);
-			var sq = state.grid.castRay(camFP, temp);
+			const sq = state.grid.castRay(camFP, temp);
 
 			// calc distances from cam to wall and player
-			var camToSquareDistSq = vec2.squaredDistance(camFP, sq!.center);
-			var camToPlayerDistSq = vec2.length(f2p);
+			const camToSquareDistSq = vec2.squaredDistance(camFP, sq!.center);
+			let camToPlayerDistSq = vec2.length(f2p);
 			camToPlayerDistSq = camToPlayerDistSq * camToPlayerDistSq;
 
 			// if we have a minimum view distance or the player is closer to the cam than the wall then it wins
@@ -170,11 +168,11 @@ class Camera {
 		}
 
 		// place eye at worldspace of cam and treat the viewpoint looking at the home door as a fixed camera
-		var camY = bestCam.doorCam ? 6 : 5;
-		var camPos = vec3.fromValues(bestCam[0], camY, bestCam[1]);
+		const camY = bestCam.doorCam ? 6 : 5;
+		const camPos = vec3.fromValues(bestCam[0], camY, bestCam[1]);
 		vec3.scale(camPos, camPos, LEVEL_SCALE);
 
-		var playerPos = vec3.clone(state.player.position);
+		const playerPos = vec3.clone(state.player.position);
 		if (bestCam.doorCam) {
 			vec3.set(playerPos, 28.5, 0, 27); // fixed view of the home base
 		}
@@ -183,8 +181,8 @@ class Camera {
 		}
 		vec3.scale(playerPos, playerPos, LEVEL_SCALE);
 
- 		mat4.lookAt(this.viewMatrix, camPos, playerPos, [0,1,0]);
-	};
+		mat4.lookAt(this.viewMatrix, camPos, playerPos, [0, 1, 0]);
+	}
 }
 
 
@@ -208,7 +206,7 @@ class Square {
 	}
 
 	closestPoint(pt2: NumArray): NumArray {
-		var closest = vec2.create();
+		const closest = vec2.create();
 		vec2.max(closest, this.min, pt2);
 		vec2.min(closest, this.max, closest);
 		return closest;
@@ -219,19 +217,19 @@ class Square {
 	}
 
 	normalAtClosestPoint(pt2: NumArray): NumArray {
-		var closest = this.closestPoint(pt2);
+		const closest = this.closestPoint(pt2);
 
 		if (vec2.equals(closest, pt2)) { // pt2 contained in box
 			return vec2.clone(this.normals[4]); // HACK: push out diagonally down right
 		}
 
-		if (closest[0] == this.min[0]) {
+		if (closest[0] === this.min[0]) {
 			return vec2.clone(this.normals[0]);
 		}
-		else if (closest[0] == this.max[0]) {
+		else if (closest[0] === this.max[0]) {
 			return vec2.clone(this.normals[1]);
 		}
-		else if (closest[1] == this.min[1]) {
+		else if (closest[1] === this.min[1]) {
 			return vec2.clone(this.normals[2]);
 		}
 
@@ -254,14 +252,10 @@ class Grid {
 
 	constructor(width: number, height: number, cells: boolean[], pathCells: boolean[]) {
 		this.squares = [];
-		var sqix = 0;
-		for (var z=0; z<height; ++z) {
-			for (var x=0; x<width; ++x) {
-				if (cells[sqix])
-					this.squares.push(new Square(x, z));
-				else
-					this.squares.push(null);
-
+		let sqix = 0;
+		for (let z = 0; z < height; ++z) {
+			for (let x = 0; x < width; ++x) {
+				this.squares.push(cells[sqix] ? new Square(x, z) : null);
 				++sqix;
 			}
 		}
@@ -274,62 +268,62 @@ class Grid {
 	}
 
 	private at(x: number, z: number) {
-		return this.squares[(z >> 0) * this.width + (x>>0)];
+		return this.squares[(z >> 0) * this.width + (x >> 0)];
 	}
 
 	private pathAt(x: number, z: number) {
-		return this.path[(z >> 0) * this.width + (x>>0)];
+		return this.path[(z >> 0) * this.width + (x >> 0)];
 	}
 
 	pathExits(curPos: NumArray, curDir: Direction) {
 		const x = curPos[0], z = curPos[1], exits: { pos: number[], dir: Direction }[] = [];
 		assert(this.pathAt(x, z), "you're not on a path!");
 
-		if ((curDir != "south") && this.pathAt(x, z-1))
-			exits.push({ pos: [x, z-1], dir: "north" });
-
-		if ((curDir != "east") && this.pathAt(x-1, z))
-			exits.push({ pos: [x-1, z], dir: "west" });
-
-		if ((curDir != "north") && this.pathAt(x, z+1))
-			exits.push({ pos: [x, z+1], dir: "south" });
-
-		if ((curDir != "west") && this.pathAt(x+1, z))
-			exits.push({ pos: [x+1, z], dir: "east" });
-
+		if ((curDir !== "south") && this.pathAt(x, z - 1)) {
+			exits.push({ pos: [x, z - 1], dir: "north" });
+		}
+		if ((curDir !== "east") && this.pathAt(x - 1, z)) {
+			exits.push({ pos: [x - 1, z], dir: "west" });
+		}
+		if ((curDir !== "north") && this.pathAt(x, z + 1)) {
+			exits.push({ pos: [x, z + 1], dir: "south" });
+		}
+		if ((curDir !== "west") && this.pathAt(x + 1, z)) {
+			exits.push({ pos: [x + 1, z], dir: "east" });
+		}
 		return exits;
 	}
 
 	set(x: number, z: number, occupied: boolean) {
-		var sq = occupied ? new Square(x, z) : null;
-		this.squares[(z>>0) * this.width + (x>>0)] = sq;
+		const sq = occupied ? new Square(x, z) : null;
+		this.squares[(z >> 0) * this.width + (x >> 0)] = sq;
 	}
 
 	castRay(from: NumArray, direction: NumArray): Square | null {
 		// adapted from sample code at: http://lodev.org/cgtutor/raycasting.html
 		vec2.normalize(direction, direction);
 
-		//calculate ray position and direction
-		var rayPosX = from[0];
-		var rayPosY = from[1];
-		var rayDirX = direction[0];
-		var rayDirY = direction[1];
-		//which box of the map we're in
-		var mapX = rayPosX << 0;
-		var mapY = rayPosY << 0;
+		// calculate ray position and direction
+		const rayPosX = from[0];
+		const rayPosY = from[1];
+		const rayDirX = direction[0];
+		const rayDirY = direction[1];
+		// which box of the map we're in
+		let mapX = rayPosX << 0;
+		let mapY = rayPosY << 0;
 
-		//length of ray from current position to next x or y-side
-		var sideDistX, sideDistY;
+		// length of ray from current position to next x or y-side
+		let sideDistX, sideDistY;
 
-		//length of ray from one x or y-side to next x or y-side
-		var deltaDistX = Math.sqrt(1 + (rayDirY * rayDirY) / (rayDirX * rayDirX));
-		var deltaDistY = Math.sqrt(1 + (rayDirX * rayDirX) / (rayDirY * rayDirY));
+		// length of ray from one x or y-side to next x or y-side
+		const deltaDistX = Math.sqrt(1 + (rayDirY * rayDirY) / (rayDirX * rayDirX));
+		const deltaDistY = Math.sqrt(1 + (rayDirX * rayDirX) / (rayDirY * rayDirY));
 
-		//what direction to step in x or y-direction (either +1 or -1)
-		var stepX, stepY;
+		// what direction to step in x or y-direction (either +1 or -1)
+		let stepX, stepY;
 
-		var tests = 0; // limit search depth
-		//calculate step and initial sideDist
+		let tests = 0; // limit search depth
+		// calculate step and initial sideDist
 		if (rayDirX < 0) {
 			stepX = -1;
 			sideDistX = (rayPosX - mapX) * deltaDistX;
@@ -348,7 +342,7 @@ class Grid {
 		}
 
 		while (++tests < 200) {
-			//jump to next map square, OR in x-direction, OR in y-direction
+			// jump to next map square, OR in x-direction, OR in y-direction
 			if (sideDistX < sideDistY) {
 				sideDistX += deltaDistX;
 				mapX += stepX;
@@ -358,34 +352,35 @@ class Grid {
 				mapY += stepY;
 			}
 
-			var sq = this.at(mapX, mapY);
-			if (sq) return sq;
+			const sq = this.at(mapX, mapY);
+			if (sq) { return sq; }
 		}
 
 		return null;
 	}
 
 	collideAndResolveCircle(posFrom: NumArray, posTo: NumArray, radius: number): NumArray {
-		var direction = vec2.create();
+		const direction = vec2.create();
 		vec2.subtract(direction, posTo, posFrom);
 
-		var toCheck: Square[] = [];
-		var minX = (posTo[0] - radius)<<0, maxX = (posTo[0] + radius)<<0;
-		var minZ = (posTo[1] - radius)<<0, maxZ = (posTo[1] + radius)<<0;
+		const toCheck: Square[] = [];
+		const minX = (posTo[0] - radius) << 0, maxX = (posTo[0] + radius) << 0;
+		const minZ = (posTo[1] - radius) << 0, maxZ = (posTo[1] + radius) << 0;
 
-		for (var tz = minZ; tz <= maxZ; ++tz) {
-			for (var tx = minX; tx <= maxX; ++tx) {
-				var sq = this.at(tx, tz);
-				if (sq) toCheck.push(sq);
+		for (let tz = minZ; tz <= maxZ; ++tz) {
+			for (let tx = minX; tx <= maxX; ++tx) {
+				const sq = this.at(tx, tz);
+				if (sq) { toCheck.push(sq); }
 			}
 		}
 
-		if (! toCheck.length)
+		if (! toCheck.length) {
 			return posTo;
+		}
 
 		let closestSquare = null, closestDist = 99999;
 		for (const sq of toCheck) {
-			var dist = sq.distanceToPoint(posTo);
+			const dist = sq.distanceToPoint(posTo);
 			if (dist < closestDist) {
 				closestDist = dist;
 				closestSquare = sq;
@@ -394,7 +389,7 @@ class Grid {
 
 		if (closestSquare && closestDist < radius) {
 			// not perfect but will work for now
-			var planeNormal = closestSquare.normalAtClosestPoint(posTo);
+			const planeNormal = closestSquare.normalAtClosestPoint(posTo);
 			vec2.scale(planeNormal, planeNormal, radius - closestDist);
 			vec2.add(posTo, posTo, planeNormal);
 		}
@@ -428,10 +423,10 @@ class Key {
 		this.keyModel.setUniformScale(1);
 		this.lockModel.setUniformScale(0.02);
 
-		var scaledPos = vec3.create();
+		const scaledPos = vec3.create();
 		this.rotAxis = vec3.fromValues(0, 1, 0);
 
-		this.lockRotAxis = [0,0,1],
+		this.lockRotAxis = [0, 0, 1];
 		this.lockRotMax = Math.PI / 40;
 
 		const keyPositions = [
@@ -458,61 +453,62 @@ class Key {
 	}
 
 	update(_dt: number) {
-		if (this.found)
+		if (this.found) {
 			return;
+		}
 
-		var playerPos = vec2.fromValues(state.player.position[0], state.player.position[2]);
-		var myPos = vec2.fromValues(this.keyPosition[0], this.keyPosition[2]);
+		const playerPos = vec2.fromValues(state.player.position[0], state.player.position[2]);
+		const myPos = vec2.fromValues(this.keyPosition[0], this.keyPosition[2]);
 
-		var maxRadius = Math.max(this.radius, state.player.radius);
+		const maxRadius = Math.max(this.radius, state.player.radius);
 		if (vec2.distance(playerPos, myPos) < maxRadius) {
 			this.found = true;
 		}
-	};
+	}
 
 	draw() {
 		if (! this.found) {
-	 		this.keyModel.setRotation(this.rotAxis, state.tCur * 1.3);
+			this.keyModel.setRotation(this.rotAxis, state.tCur * 1.3);
 			this.keyModel.draw(state.camera, state.modelProgram, 0);
 
-			var lrt = this.lockRotMax * Math.sin(state.tCur * 2);
-			this.lockModel.setRotation(this.lockRotAxis, lrt)
+			const lrt = this.lockRotMax * Math.sin(state.tCur * 2);
+			this.lockModel.setRotation(this.lockRotAxis, lrt);
 			this.lockModel.draw(state.camera, state.modelProgram, 0);
 		}
-	};
+	}
 }
 
 
 function makeDoorMesh(cornerColors: number[][]) {
 	const vertexes: number[] = [], normals: number[] = [], colors: number[] = [], uvs = [];
 
-	var xa = -1.5, xb = 1.5,
+	const xa = -1.5, xb = 1.5,
 		h = 3,
 		za = 0, zb = .5;
 
 	function vtx(x: number, y: number, z: number) { vertexes.push(x, y, z); }
 	function col(c: number[]) { colors.push(c[0], c[1], c[2]); }
-	function nrm6(nrm: number[]) { for(var n=0; n<6; ++n) normals.push(nrm[0], nrm[1], nrm[2]); }
+	function nrm6(nrm: number[]) { for (let n = 0; n < 6; ++n) { normals.push(nrm[0], nrm[1], nrm[2]); } }
 
-	vtx(xb, h, za); col(cornerColors[0]); uvs.push(0,0);
-	vtx(xb, 0, za); col(cornerColors[2]); uvs.push(0,1);
-	vtx(xa, 0, za); col(cornerColors[3]); uvs.push(1,1);
+	vtx(xb, h, za); col(cornerColors[0]); uvs.push(0, 0);
+	vtx(xb, 0, za); col(cornerColors[2]); uvs.push(0, 1);
+	vtx(xa, 0, za); col(cornerColors[3]); uvs.push(1, 1);
 
-	vtx(xa, 0, za); col(cornerColors[3]); uvs.push(1,1);
-	vtx(xa, h, za); col(cornerColors[1]); uvs.push(1,0);
-	vtx(xb, h, za); col(cornerColors[0]); uvs.push(0,0);
+	vtx(xa, 0, za); col(cornerColors[3]); uvs.push(1, 1);
+	vtx(xa, h, za); col(cornerColors[1]); uvs.push(1, 0);
+	vtx(xb, h, za); col(cornerColors[0]); uvs.push(0, 0);
 
-	nrm6([0,0,-1]);
+	nrm6([0, 0, -1]);
 
-	vtx(xb, h, zb); col(cornerColors[4]); uvs.push(0,0);
-	vtx(xb, h, za); col(cornerColors[4]); uvs.push(0,0);
-	vtx(xa, h, za); col(cornerColors[4]); uvs.push(0,0);
+	vtx(xb, h, zb); col(cornerColors[4]); uvs.push(0, 0);
+	vtx(xb, h, za); col(cornerColors[4]); uvs.push(0, 0);
+	vtx(xa, h, za); col(cornerColors[4]); uvs.push(0, 0);
 
-	vtx(xa, h, za); col(cornerColors[4]); uvs.push(0,0);
-	vtx(xa, h, zb); col(cornerColors[4]); uvs.push(0,0);
-	vtx(xb, h, zb); col(cornerColors[4]); uvs.push(0,0);
+	vtx(xa, h, za); col(cornerColors[4]); uvs.push(0, 0);
+	vtx(xa, h, zb); col(cornerColors[4]); uvs.push(0, 0);
+	vtx(xb, h, zb); col(cornerColors[4]); uvs.push(0, 0);
 
-	nrm6([0,1,0]);
+	nrm6([0, 1, 0]);
 
 	return new TriMesh(gl, vertexes, normals, colors, uvs);
 }
@@ -535,7 +531,7 @@ class Door {
 
 		this.model.setUniformScale(4);
 
-		var scaledPos = vec3.create();
+		const scaledPos = vec3.create();
 		vec3.scale(scaledPos, this.position, LEVEL_SCALE);
 		this.model.setPosition(scaledPos);
 
@@ -546,12 +542,12 @@ class Door {
 	}
 
 	update(_dt: number) {
-		if (this.state == "closed") {
-			var allKeys = state.keyItems.every(function(key) { return key.found; });
+		if (this.state === "closed") {
+			const allKeys = state.keyItems.every(function(key) { return key.found; });
 
 			if (allKeys) {
-				var playerPos = vec2.fromValues(state.player.position[0], state.player.position[2]);
-				var myPos = vec2.fromValues(this.position[0], this.position[2]);
+				const playerPos = vec2.fromValues(state.player.position[0], state.player.position[2]);
+				const myPos = vec2.fromValues(this.position[0], this.position[2]);
 
 				if (vec2.distance(playerPos, myPos) < 2) {
 					this.state = "opening";
@@ -559,14 +555,14 @@ class Door {
 				}
 			}
 		}
-		else if (this.state == "opening") {
-			var step = Math.max(0, Math.min(1, (state.tCur - this.openT0) / 4));
+		else if (this.state === "opening") {
+			const step = Math.max(0, Math.min(1, (state.tCur - this.openT0) / 4));
 			this.position[0] = 28.5 + ((Math.random() - 0.5) * 0.03);
 			this.position[1] = -3 * step;
 			const scaledPos = vec3.scale([], this.position, LEVEL_SCALE);
 			this.model.setPosition(scaledPos);
 
-			if (step == 1) {
+			if (step === 1) {
 				// unblock
 				state.grid.set(27, 27, false);
 				state.grid.set(28, 27, false);
@@ -589,13 +585,13 @@ class End {
 	T = -1;
 
 	update(_dt: number) {
-		var playerPos = vec2.fromValues(state.player.position[0], state.player.position[2]);
+		const playerPos = vec2.fromValues(state.player.position[0], state.player.position[2]);
 		if (vec2.distance(playerPos, this.position) < this.radius) {
 			this.T = state.tCur;
 
-			var totalSeconds = this.T << 0;
-			var minutes = (totalSeconds / 60) << 0;
-			var seconds = totalSeconds - (minutes * 60);
+			const totalSeconds = this.T << 0;
+			const minutes = (totalSeconds / 60) << 0;
+			const seconds = totalSeconds - (minutes * 60);
 
 			$1("#minutes").textContent = "" + minutes;
 			$1("#seconds").textContent = "" + seconds;
@@ -639,8 +635,8 @@ class Player {
 
 	update(dt: number) {
 		if (this.dieT >= 0) {
-			var meltStep = (state.tCur - this.dieT) / 4;
-			var meltClamp = Math.max(0, Math.min(1, meltStep));
+			const meltStep = (state.tCur - this.dieT) / 4;
+			const meltClamp = Math.max(0, Math.min(1, meltStep));
 			this.model.setScale(1 + meltClamp * 3, Math.max(0.1, Math.pow(1 - meltClamp, 2)), 1 + meltClamp * 3);
 
 			if (meltStep >= 2) {
@@ -653,7 +649,7 @@ class Player {
 		}
 		else {
 			// -- rotation
-			var turnAngle = 0;
+			let turnAngle = 0;
 			if (state.keys[KEY_LEFT] || state.keys[KEY_A]) {
 				turnAngle = -this.turnSpeed;
 			}
@@ -663,7 +659,7 @@ class Player {
 			this.viewAngle += turnAngle * dt;
 
 			// -- movement
-			var speed = 0;
+			let speed = 0;
 			if (state.keys[KEY_UP] || state.keys[KEY_W]) {
 				speed = -this.speed;
 			}
@@ -671,24 +667,25 @@ class Player {
 				speed = this.speed;
 			}
 
-			if (speed != 0) {
+			if (speed !== 0) {
 				mat2.fromRotation(this.moveMat, this.viewAngle);
 				mat2.scale(this.moveMat, this.moveMat, [speed * dt, speed * dt]);
 				vec2.set(this.movePos, 1, 0);
 				vec2.transformMat2(this.movePos, this.movePos, this.moveMat);
 
-				var oldPos = vec2.fromValues(this.position[0], this.position[2]);
-				var newPos: MutNumArray = vec2.create();
+				const oldPos = vec2.fromValues(this.position[0], this.position[2]);
+				let newPos: MutNumArray = vec2.create();
 				vec2.add(newPos, oldPos, this.movePos);
 
 				newPos = state.grid.collideAndResolveCircle(oldPos, newPos, this.radius);
 
 				// warp tunnel
-				if (newPos[0] < 0)
+				if (newPos[0] < 0) {
 					newPos[0] += state.grid.width;
-				if (newPos[0] >= state.grid.width)
+				}
+				if (newPos[0] >= state.grid.width) {
 					newPos[0] -= state.grid.width;
-
+				}
 				this.position[0] = newPos[0];
 				this.position[2] = newPos[1];
 			}
@@ -747,12 +744,12 @@ class Abomination {
 	}
 
 	update(_dt: number) {
-		if (this.phase == "move") {
+		if (this.phase === "move") {
 			if (state.tCur - this.lastStepT > this.stepDuration) {
 				this.pathStep++;
 				this.lastStepT = state.tCur;
-				var dirVec2 = Abomination.directionVecs[this.direction];
-				var dirVec3 = vec3.fromValues(dirVec2[0], 0, dirVec2[1]);
+				const dirVec2 = Abomination.directionVecs[this.direction];
+				const dirVec3 = vec3.fromValues(dirVec2[0], 0, dirVec2[1]);
 
 				const moveOffset = vec3.scale([0, 0, 0], dirVec3, this.pathStep / 2);
 				const scaledPos = vec3.set([0, 0, 0], this.pathPos[0] + 0.5, 0, this.pathPos[1] + 0.5);
@@ -763,27 +760,27 @@ class Abomination {
 				this.model.setRotation(this.rotAxis, Abomination.rotations[this.direction]);
 
 				// moved 1 full tile
-				if (this.pathStep == 2) {
+				if (this.pathStep === 2) {
 					vec2.add(this.pathPos, this.pathPos, dirVec2);
 					this.pathStep = 0;
 
-					var exits = state.grid.pathExits(this.pathPos, this.direction);
-					var exit = exits[intRandom(exits.length)];
+					const exits = state.grid.pathExits(this.pathPos, this.direction);
+					const exit = exits[intRandom(exits.length)];
 
-					if (exit.dir != this.direction) {
+					if (exit.dir !== this.direction) {
 						this.nextDir = exit.dir;
 						this.phase = "turn";
 					}
 				}
 			}
 		} // move
-		else if (this.phase == "turn") {
-			var step = Math.max(0, Math.min(1, (state.tCur - this.lastStepT) / this.turnDuration));
+		else if (this.phase === "turn") {
+			let step = Math.max(0, Math.min(1, (state.tCur - this.lastStepT) / this.turnDuration));
 			step = step * step;
 
-			var fromAngle = Abomination.rotations[this.direction];
-			var toAngle = Abomination.rotations[this.nextDir];
-			var rotation = toAngle - fromAngle;
+			const fromAngle = Abomination.rotations[this.direction];
+			const toAngle = Abomination.rotations[this.nextDir];
+			let rotation = toAngle - fromAngle;
 			if (rotation < (Math.PI * -1.01)) {
 				rotation += Math.PI * 2;
 			}
@@ -802,18 +799,17 @@ class Abomination {
 		}
 
 		// -- check collisions against player
-		var playerPos = vec2.fromValues(state.player.position[0], state.player.position[2]);
+		const playerPos = vec2.fromValues(state.player.position[0], state.player.position[2]);
 
-		var maxRadius = Math.max(this.radius, state.player.radius);
+		const maxRadius = Math.max(this.radius, state.player.radius);
 		if (vec2.distance(playerPos, this.pathPos) < maxRadius) {
 			state.player.die();
 		}
-
-	};
+	}
 
 	draw() {
 		this.model.draw(state.camera, state.texturedProgram, 1 - (this.pathStep & 1));
-	};
+	}
 }
 
 
@@ -823,8 +819,9 @@ function drawScene(camera: Camera) {
 	// -- PLAIN MODELS
 	gl.useProgram(state.modelProgram);
 	gl.uniformMatrix4fv(state.modelProgram.projMatrixUniform, false, camera.projectionMatrix);
-	if (state.modelProgram.timeUniform)
+	if (state.modelProgram.timeUniform) {
 		gl.uniform1f(state.modelProgram.timeUniform, state.tCur);
+	}
 
 	state.models["map"].draw(camera, state.modelProgram, 0);
 	state.player.draw();
@@ -833,8 +830,9 @@ function drawScene(camera: Camera) {
 	// -- TEXTURED MODELS
 	gl.useProgram(state.texturedProgram);
 	gl.uniformMatrix4fv(state.texturedProgram.projMatrixUniform, false, camera.projectionMatrix);
-	if (state.texturedProgram.timeUniform)
+	if (state.texturedProgram.timeUniform) {
 		gl.uniform1f(state.texturedProgram.timeUniform, state.tCur);
+	}
 
 	state.door.draw();
 	state.pacs.forEach(function(pac) { pac.draw(); });
@@ -860,8 +858,8 @@ function setupGL(then: (c: Camera) => void) {
 
 function nextFrame() {
 	state.tCur = (Date.now() / 1000.0) - state.t0;
-	var dt = state.tCur - state.tLast;
-	var camera = state.camera;
+	const dt = state.tCur - state.tLast;
+	const camera = state.camera;
 
 	// -- update
 	state.end.update(dt);
@@ -876,8 +874,9 @@ function nextFrame() {
 
 	state.tLast = state.tCur;
 
-	if (active && (state.end.T < 0))
+	if (active && (state.end.T < 0)) {
 		requestAnimationFrame(nextFrame);
+	}
 }
 
 
@@ -934,21 +933,23 @@ function init() {
 		state.texturedProgram = createStandardProgram(gl, "texturedVert", "texturedFrag");
 
 		window.onkeydown = function(evt: KeyboardEvent) {
-			var kc = evt.keyCode;
+			const kc = evt.keyCode;
 			state.keys[kc] = true;
-			if (! evt.metaKey)
+			if (! evt.metaKey) {
 				evt.preventDefault();
+			}
 		};
 		window.onkeyup = function(evt: KeyboardEvent) {
-			var kc = evt.keyCode;
+			const kc = evt.keyCode;
 			state.keys[kc] = false;
-			if (! evt.metaKey)
+			if (! evt.metaKey) {
 				evt.preventDefault();
+			}
 		};
 		window.onblur = function() { active = false; state.keys = []; };
 		window.onfocus = function() {
 			active = true;
-			if (mode == "game") {
+			if (mode === "game") {
 				state.tLast = (Date.now() / 1000.0) - state.t0;
 				nextFrame();
 			}
@@ -971,7 +972,7 @@ function init() {
 			state.grid = new Grid(mapData.gridW, mapData.gridH, mapData.grid, mapData.path);
 			state.cornerColors = mapData.cornerColors;
 
-			var pacColor = u8Color(213, 215, 17);
+			const pacColor = u8Color(213, 215, 17);
 
 			// Promises are for wimps
 			createStandardTexture(gl, "assets/doortex.png", function(doorTex) {
@@ -981,23 +982,23 @@ function init() {
 					state.textures["crackpac"] = pacTex;
 
 					loadObjFile("assets/pac1.obj", function(pac1Data) {
-						var pac1Colors = genColorArray(pacColor, pac1Data.elements);
+						const pac1Colors = genColorArray(pacColor, pac1Data.elements);
 						state.meshes["pac1"] = new TriMesh(gl, pac1Data.vertexes, pac1Data.normals, pac1Colors, pac1Data.uvs);
 
 						loadObjFile("assets/pac2.obj", function(pac2Data) {
-							var pac2Colors = genColorArray(pacColor, pac2Data.elements);
+							const pac2Colors = genColorArray(pacColor, pac2Data.elements);
 							state.meshes["pac2"] = new TriMesh(gl, pac2Data.vertexes, pac2Data.normals, pac2Colors, pac2Data.uvs);
 
 							loadObjFile("assets/key.obj", function(keyData) {
-								var keyColors = genColorArray(u8Color(201,163,85), keyData.elements);
+								const keyColors = genColorArray(u8Color(201, 163, 85), keyData.elements);
 								state.meshes["key"] = new TriMesh(gl, keyData.vertexes, keyData.normals, keyColors);
 
 								loadObjFile("assets/lock.obj", function(lockData) {
-									var lockColors = genColorArray(u8Color(0x66,0x77,0x88), lockData.elements);
+									const lockColors = genColorArray(u8Color(0x66, 0x77, 0x88), lockData.elements);
 									state.meshes["lock"] = new TriMesh(gl, lockData.vertexes, lockData.normals, lockColors);
 
 									loadObjFile("assets/spookje.obj", function(spookjeData) {
-										var spookjeColors = genColorArray(u8Color(255,184,221), spookjeData.elements);
+										const spookjeColors = genColorArray(u8Color(255, 184, 221), spookjeData.elements);
 										state.meshes["spookje"] = new TriMesh(gl, spookjeData.vertexes, spookjeData.normals, spookjeColors);
 
 										showTitle();

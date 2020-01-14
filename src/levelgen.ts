@@ -27,7 +27,7 @@ function buildMapFromImageData(gl: WebGLRenderingContext, pix: ImageData): MapDa
 	const vertexes: number[] = [], normals: number[] = [], colors: number[] = [], cameras: CameraPoint[] = [], grid = [], path = [];
 
 	function vtx(x: number, y: number, z: number) { vertexes.push(x, y, z); }
-	function nrm6(nrm: NumArray) { for(var n=0; n<6; ++n) normals.push(nrm[0], nrm[1], nrm[2]); }
+	function nrm6(nrm: NumArray) { for (let n = 0; n < 6; ++n) { normals.push(nrm[0], nrm[1], nrm[2]); } }
 	function col6(colT: NumArray, colB: NumArray) {
 		colors.push(colT[0], colT[1], colT[2]);
 		colors.push(colB[0], colB[1], colB[2]);
@@ -62,34 +62,34 @@ function buildMapFromImageData(gl: WebGLRenderingContext, pix: ImageData): MapDa
 		botDarkenFactor = 0.30;    // bottom vertices are darker than top ones
 
 	// home base in the grid
-	const homeBaseMin = [21,26],
-		homeBaseMax = [35,34];
-	const doorCameraLoc = [28,23];
+	const homeBaseMin = [21, 26],
+		homeBaseMax = [35, 34];
+	const doorCameraLoc = [28, 23];
 
-	for (let z=0; z < pixh; ++z) {
-		for (let x=0; x < pixw; ++x) {
+	for (let z = 0; z < pixh; ++z) {
+		for (let x = 0; x < pixw; ++x) {
 			grid[gridOffset] = false;
 			path[gridOffset] = false;
 
-			if ((data[offset+0] != 0 && data[offset+0] != 255) ||
-				(data[offset+1] != 0 && data[offset+1] != 255) ||
-				(data[offset+2] != 0 && data[offset+2] != 255)) {
-				console.info(x, z, data[offset], data[offset+1], data[offset+2], data[offset+3]);
+			if ((data[offset + 0] !== 0 && data[offset + 0] !== 255) ||
+				(data[offset + 1] !== 0 && data[offset + 1] !== 255) ||
+				(data[offset + 2] !== 0 && data[offset + 2] !== 255)) {
+				console.info(x, z, data[offset], data[offset + 1], data[offset + 2], data[offset + 3]);
 			}
 
-			if (data[offset] == 0) {
-				var xa = x * LEVEL_SCALE,
-					xb = (x+1) * LEVEL_SCALE,
+			if (data[offset] === 0) {
+				const xa = x * LEVEL_SCALE,
+					xb = (x + 1) * LEVEL_SCALE,
 					za = z * LEVEL_SCALE,
-					zb = (z+1) * LEVEL_SCALE,
+					zb = (z + 1) * LEVEL_SCALE,
 					h = HEIGHT;
 
-				if (data[offset+2] == 255) {
+				if (data[offset + 2] === 255) {
 					path[gridOffset] = true;
 				}
 
-				if (data[offset+1] == 255) {
-					if (vec2.equals([x,z], doorCameraLoc)) {
+				if (data[offset + 1] === 255) {
+					if (vec2.equals([x, z], doorCameraLoc)) {
 						const dc: any = vec2.fromValues(x + .5, z + .1);
 						dc.doorCam = true;
 						cameras.push(dc);
@@ -101,12 +101,13 @@ function buildMapFromImageData(gl: WebGLRenderingContext, pix: ImageData): MapDa
 					}
 				}
 
-				if ((data[offset+1] == 0) && (data[offset+2] == 0)) {
+				if ((data[offset + 1] === 0) && (data[offset + 2] === 0)) {
+					++inuse;
 					grid[gridOffset] = true;
 
 					// determine color to use
-					var topColor = vec3.create();
-					var botColor = vec3.create();
+					const topColor = vec3.create();
+					const botColor = vec3.create();
 
 					if (x >= homeBaseMin[0] && x <= homeBaseMax[0] && z >= homeBaseMin[1] && z <= homeBaseMax[1]) {
 						vec3.copy(topColor, cornerColors[4]);
@@ -114,7 +115,7 @@ function buildMapFromImageData(gl: WebGLRenderingContext, pix: ImageData): MapDa
 					}
 					else {
 						// calculate interpolated color by distance from the 4 corners of the field
-						var cornerDist = vec4.create();
+						const cornerDist = vec4.create();
 						cornerDist[0] = vec2.squaredDistance(corners[0], [x, z]);
 						cornerDist[1] = vec2.squaredDistance(corners[1], [x, z]);
 						cornerDist[2] = vec2.squaredDistance(corners[2], [x, z]);
@@ -193,7 +194,7 @@ function buildMapFromImageData(gl: WebGLRenderingContext, pix: ImageData): MapDa
 	}
 
 	console.info("map inuse", inuse);
-	console.info("vtx", vertexes.count, "cams", cameras.length);
+	console.info("vtx", vertexes.length, "cams", cameras.length);
 
 	return {
 		cameras,
@@ -216,7 +217,7 @@ export function genMapMesh(gl: WebGLRenderingContext, then: (md: MapData) => voi
 		cvs.width = img.width;
 		cvs.height = img.height;
 
-		var ctx = cvs.getContext("2d")!;
+		const ctx = cvs.getContext("2d")!;
 		(ctx as any).webkitImageSmoothingEnabled = false; // NO
 		(ctx as any).mozImageSmoothingEnabled = false;
 		(ctx as any).msImageSmoothingEnabled = false;
@@ -227,7 +228,7 @@ export function genMapMesh(gl: WebGLRenderingContext, then: (md: MapData) => voi
 		const map = buildMapFromImageData(gl, pix);
 		const t1 = performance.now();
 
-		console.info("mapGen took", (t1-t0), "ms");
+		console.info("mapGen took", (t1 - t0), "ms");
 
 		then(map);
 	};
