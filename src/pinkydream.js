@@ -985,29 +985,29 @@ function init() {
 			var pacColor = u8Color(213, 215, 17);
 
 			// Promises are for wimps
-			createStandardTexture("doortex.png", function(doorTex) {
+			createStandardTexture("assets/doortex.png", function(doorTex) {
 				state.textures["door"] = doorTex;
 
-				createStandardTexture("crackpac.png", function(pacTex) {
+				createStandardTexture("assets/crackpac.png", function(pacTex) {
 					state.textures["crackpac"] = pacTex;
 
-					loadObjFile("pac1.obj", function(pac1Data) {
+					loadObjFile("assets/pac1.obj", function(pac1Data) {
 						var pac1Colors = genColorArray(pacColor, pac1Data.elements);
 						state.meshes["pac1"] = new TriMesh(gl, pac1Data.vertexes, pac1Data.normals, pac1Colors, pac1Data.uvs);
 
-						loadObjFile("pac2.obj", function(pac2Data) {
+						loadObjFile("assets/pac2.obj", function(pac2Data) {
 							var pac2Colors = genColorArray(pacColor, pac2Data.elements);
 							state.meshes["pac2"] = new TriMesh(gl, pac2Data.vertexes, pac2Data.normals, pac2Colors, pac2Data.uvs);
 
-							loadObjFile("key.obj", function(keyData) {
+							loadObjFile("assets/key.obj", function(keyData) {
 								var keyColors = genColorArray(u8Color(201,163,85), keyData.elements);
 								state.meshes["key"] = new TriMesh(gl, keyData.vertexes, keyData.normals, keyColors, null);
 
-								loadObjFile("lock.obj", function(lockData) {
+								loadObjFile("assets/lock.obj", function(lockData) {
 									var lockColors = genColorArray(u8Color(0x66,0x77,0x88), lockData.elements);
 									state.meshes["lock"] = new TriMesh(gl, lockData.vertexes, lockData.normals, lockColors, null);
 
-									loadObjFile("spookje.obj", function(spookjeData) {
+									loadObjFile("assets/spookje.obj", function(spookjeData) {
 										var spookjeColors = genColorArray(u8Color(255,184,221), spookjeData.elements);
 										state.meshes["spookje"] = new TriMesh(gl, spookjeData.vertexes, spookjeData.normals, spookjeColors, null);
 
