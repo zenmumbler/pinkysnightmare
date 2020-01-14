@@ -1,0 +1,18 @@
+{
+  "name": "pinkysnightmare",
+  "version": "1.0.0",
+  "browser": "dist/index.js",
+  "author": "Arthur Langereis",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "dev": "rollup -c -w"
+  },
+  "devDependencies": {
+    "@rollup/plugin-node-resolve": "^7.0.0",
+    "rollup": "^1.29.0",
+    "rollup-plugin-typescript2": "^0.25.3",
+    "tslib": "^1.10.0",
+    "typescript": "^3.7.4"
+  }
+}
