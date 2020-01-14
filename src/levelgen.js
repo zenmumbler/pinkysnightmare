@@ -218,7 +218,7 @@ export function genMapMesh(gl, then) {
 		var map = buildMapFromImageData(gl, pix);
 		var t1 = performance.now();
 
-		console.info("mapGen took", (t1-t0).toFixed(2), "ms");
+		console.info("mapGen took", (t1-t0), "ms");
 
 		then(map);
 	};
