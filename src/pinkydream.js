@@ -2,6 +2,7 @@
 // An entry for LD33 Game Jampo — You are the Monster
 // (c) 2015 by Arthur Langereis — @zenmumbler
 
+import { $1, on, show, hide, assert } from "./util.js";
 import { TriMesh, u8Color } from "./asset.js";
 import { LEVEL_SCALE, genMapMesh } from "./levelgen.js";
 import { loadObjFile } from "./objloader.js";

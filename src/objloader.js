@@ -1,6 +1,8 @@
 // Part of Pinky's Nightmare
 // (c) 2015 by Arthur Langereis - @zenmumbler
 
+import { assert } from "./util.js";
+
 function loadObj(text, then) {
 	var t0 = performance.now();
 	var lines = text.split("\n");

@@ -57,22 +57,6 @@
 	<p class="attrib">Key model by `senjen` from <a href="http://www.models-resource.com/pc_computer/zelda2fps/model/5369/">The Models Resource</a></p>
 </div>
 
-<script>
-function seq(t) { return (Array.isArray(t)) ? t : [t]; }
-function $n(sel,base) { return Array.prototype.slice.call((base||document).querySelectorAll(sel), 0); }
-function $(sel,base) { return (typeof(sel) == 'string') ? $n(sel,base) : seq(sel); }
-function $1(sel,base) { return $(sel,base)[0]; }
-
-function on(target, evt, handler) { $(target).forEach(function(tgt) { tgt.addEventListener(evt, handler, false); }); }
-function show(sel,disp) { $(sel).forEach(function(el){ el.style.display = disp||"block" }); }
-function hide(sel) { $(sel).forEach(function(el){ el.style.display = "none" }); }
-
-function assert(cond, msg) {
-	if (! cond) {
-		throw new Error(msg || "assertion failed");
-	}
-}
-</script>
 <script src="gl-matrix-min.js"></script>
 <script type="module" src="src/pinkydream.js"></script>
 
