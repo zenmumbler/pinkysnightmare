@@ -3,34 +3,55 @@
 // (c) 2015 by Arthur Langereis — @zenmumbler
 
 import { $1, on, show, hide, assert } from "./util.js";
-import { TriMesh, u8Color } from "./asset.js";
-import { LEVEL_SCALE, genMapMesh } from "./levelgen.js";
+import { createStandardProgram, createStandardTexture, TriMesh, u8Color, StandardProgram } from "./asset.js";
+import { LEVEL_SCALE, genMapMesh, CameraPoint } from "./levelgen.js";
 import { loadObjFile } from "./objloader.js";
 
-var gl;
+declare const vec2: any;
+declare const vec3: any;
+declare const mat2: any;
+declare const mat3: any;
+declare const mat4: any;
 
-var state = {
-	keys: [],
-	meshes: {},
-	textures: {},
-	models: {},
-	keyItems: [],
-	pacs: []
-};
+var gl: WebGLRenderingContext;
 
-var active = true, mode = "title";
+interface State {
+	t0: number;
+	tCur: number;
+	tLast: number;
 
-var KEY_UP = 38, KEY_DOWN = 40, KEY_LEFT = 37, KEY_RIGHT = 39,
-	KEY_SPACE = 32, KEY_RETURN = 13,
-	KEY_W = 'W'.charCodeAt(0), KEY_A = 'A'.charCodeAt(0), KEY_S = 'S'.charCodeAt(0), KEY_D = 'D'.charCodeAt(0),
-	KEY_K = 'K'.charCodeAt(0);
+	keys: boolean[];
+	meshes: Record<string, TriMesh>;
+	textures: Record<string, WebGLTexture>;
+	models: Record<string, Model>;
+	keyItems: Key[];
+	pacs: Abomination[];
+	player: Player;
+	door: Door;
+	grid: Grid;
+	end: End;
+	camera: Camera;
 
-
-function intRandom(choices) {
-	return (Math.random() * choices) << 0;
+	modelProgram: StandardProgram;
+	texturedProgram: StandardProgram;
+	cornerColors: number[][];
 }
 
-function genColorArray(color, times) {
+let state: State;
+
+let active = true, mode = "title";
+
+const KEY_UP = 38, KEY_DOWN = 40, KEY_LEFT = 37, KEY_RIGHT = 39,
+	// KEY_SPACE = 32, KEY_RETURN = 13,
+	KEY_W = 'W'.charCodeAt(0), KEY_A = 'A'.charCodeAt(0), KEY_S = 'S'.charCodeAt(0), KEY_D = 'D'.charCodeAt(0);
+	// KEY_K = 'K'.charCodeAt(0);
+
+
+function intRandom(choices: number) {
+	return (Math.random() * choices) | 0;
+}
+
+function genColorArray(color: number[], times: number) {
 	var result = [];
 	for (var n=0; n < times; ++n) {
 		result.push(color[0], color[1], color[2]);
@@ -39,69 +60,81 @@ function genColorArray(color, times) {
 }
 
 
-function Model(...args) {
-	this.meshes = [].slice.call(args, 0);
-	this.texture = null;
+class Model {
+	meshes: TriMesh[];
+	texture: WebGLTexture | undefined;
 
-	var scaleMat = mat4.create();
-	var rotMat = mat4.create();
-	var transMat = mat4.create();
-	var modelMatrix = mat4.create();
-	var modelViewMatrix = mat4.create();
-	var normalMatrix = mat3.create();
+	scaleMat = mat4.create();
+	rotMat = mat4.create();
+	transMat = mat4.create();
+	modelMatrix = mat4.create();
+	modelViewMatrix = mat4.create();
+	normalMatrix = mat3.create();
 
-	this.draw = function(camera, program, meshIndex) {
-		mat4.multiply(modelMatrix, transMat, rotMat);
-		mat4.multiply(modelMatrix, modelMatrix, scaleMat);
+	constructor(meshes: TriMesh[], texture?: WebGLTexture) {
+		this.meshes = meshes;
+		this.texture = texture;
+	}
 
-		this.debugModelMatrix = mat4.clone(modelMatrix);
+	draw(camera: Camera, program: StandardProgram, meshIndex: number) {
+		mat4.multiply(this.modelMatrix, this.transMat, this.rotMat);
+		mat4.multiply(this.modelMatrix, this.modelMatrix, this.scaleMat);
 
-		mat4.multiply(modelViewMatrix, camera.viewMatrix, modelMatrix);
-		gl.uniformMatrix4fv(program.mvMatrixUniform, false, modelViewMatrix);
+		// this.debugModelMatrix = mat4.clone(modelMatrix);
+
+		mat4.multiply(this.modelViewMatrix, camera.viewMatrix, this.modelMatrix);
+		gl.uniformMatrix4fv(program.mvMatrixUniform, false, this.modelViewMatrix);
 
 		if (program.normalMatrixUniform) {
-			mat3.fromMat4(normalMatrix, modelViewMatrix);
-			mat3.invert(normalMatrix, normalMatrix);
-			mat3.transpose(normalMatrix, normalMatrix);
-			gl.uniformMatrix3fv(program.normalMatrixUniform, false, normalMatrix);
+			mat3.fromMat4(this.normalMatrix, this.modelViewMatrix);
+			mat3.invert(this.normalMatrix, this.normalMatrix);
+			mat3.transpose(this.normalMatrix, this.normalMatrix);
+			gl.uniformMatrix3fv(program.normalMatrixUniform, false, this.normalMatrix);
 		}
 
-		this.meshes[meshIndex].draw(program, this.texture);
+		this.meshes[meshIndex].draw(gl, program, this.texture);
 	};
 
-	this.setUniformScale = function(s) {
-		mat4.fromScaling(scaleMat, [s, s, s]);
-	};
+	setUniformScale(s: number) {
+		mat4.fromScaling(this.scaleMat, [s, s, s]);
+	}
 
-	this.setScale = function(sx, sy, sz) {
-		mat4.fromScaling(scaleMat, [sx, sy, sz]);
-	};
+	setScale(sx: number, sy: number, sz: number) {
+		mat4.fromScaling(this.scaleMat, [sx, sy, sz]);
+	}
 
-	this.setPosition = function(v3) {
-		mat4.fromTranslation(transMat, v3);
-	};
+	setPosition(v3: number[]) {
+		mat4.fromTranslation(this.transMat, v3);
+	}
 
-	this.setRotation = function(axis, angle) {
-		mat4.fromRotation(rotMat, angle, axis);
+	setRotation(axis: number[], angle: number) {
+		mat4.fromRotation(this.rotMat, angle, axis);
 	};
 }
 
 
-function deg2rad(deg) {
+function deg2rad(deg: number) {
 	return deg * 3.14159265358979323846 / 180.0;
 }
 
 
-function Camera(canvas) {
-	var w = canvas.width;
-	var h = canvas.height;
-	gl.viewport(0, 0, w, h);
+class Camera {
+	projectionMatrix: number[];
+	viewMatrix: number[];
+	fixedPoints!: CameraPoint[];
 
-	this.projectionMatrix = mat4.create();
-	mat4.perspective(this.projectionMatrix, deg2rad(65), w / h, 0.05, 100.0);
-	this.viewMatrix = mat4.create();
+	constructor(canvas: HTMLCanvasElement) {
+		var w = canvas.width;
+		var h = canvas.height;
 
-	this.pickClosestVantagePoint = function() {
+		gl.viewport(0, 0, w, h);
+
+		this.projectionMatrix = mat4.create();
+		mat4.perspective(this.projectionMatrix, deg2rad(65), w / h, 0.05, 100.0);
+		this.viewMatrix = mat4.create();
+	}
+
+	pickClosestVantagePoint() {
 		var playerPos = vec2.fromValues(state.player.position[0], state.player.position[2]);
 
 		// order viewpoints by distance to player
@@ -123,7 +156,7 @@ function Camera(canvas) {
 			var sq = state.grid.castRay(camFP, temp);
 
 			// calc distances from cam to wall and player
-			var camToSquareDistSq = vec2.squaredDistance(camFP, sq.center);
+			var camToSquareDistSq = vec2.squaredDistance(camFP, sq!.center);
 			var camToPlayerDistSq = vec2.length(f2p);
 			camToPlayerDistSq = camToPlayerDistSq * camToPlayerDistSq;
 
@@ -142,7 +175,6 @@ function Camera(canvas) {
 		}
 
 		// place eye at worldspace of cam and treat the viewpoint looking at the home door as a fixed camera
-		var doorCameraLoc = [28,23];
 		var camY = bestCam.doorCam ? 6 : 5;
 		var camPos = vec3.fromValues(bestCam[0], camY, bestCam[1]);
 		vec3.scale(camPos, camPos, LEVEL_SCALE);
@@ -161,19 +193,12 @@ function Camera(canvas) {
 }
 
 
-function Square(x, y) {
-	var min = vec2.fromValues(x,y),
-		max = vec2.fromValues(x+1, y+1);
-	this.center = vec2.fromValues(x+.5, y+.5);
+class Square {
+	min: number[];
+	max: number[];
+	center: number[];
 
-	this.closestPoint = function(pt2) {
-		var closest = vec2.create();
-		vec2.max(closest, min, pt2);
-		vec2.min(closest, max, closest);
-		return closest;
-	};
-
-	var normals = [
+	normals = [
 		vec2.fromValues(-1, 0), // left
 		vec2.fromValues(1, 0), // right
 		vec2.fromValues(0, -1), // top
@@ -181,89 +206,111 @@ function Square(x, y) {
 		vec2.fromValues(Math.sqrt(2), Math.sqrt(2)) // inner (hack)
 	];
 
-	this.containsPoint = function(pt2) {
-		return vec2.equals(this.closestPoint(pt2), pt2);
-	};
+	constructor(x: number, y: number) {
+		this.min = vec2.fromValues(x, y);
+		this.max = vec2.fromValues(x + 1, y + 1);
+		this.center = vec2.fromValues(x + .5, y + .5);
+	}
 
-	this.normalAtClosestPoint = function(pt2) {
+	closestPoint(pt2: number[]): number[] {
+		var closest = vec2.create();
+		vec2.max(closest, this.min, pt2);
+		vec2.min(closest, this.max, closest);
+		return closest;
+	}
+
+	containsPoint(pt2: number[]): boolean {
+		return vec2.equals(this.closestPoint(pt2), pt2);
+	}
+
+	normalAtClosestPoint(pt2: number[]): number[] {
 		var closest = this.closestPoint(pt2);
 
 		if (vec2.equals(closest, pt2)) { // pt2 contained in box
-			return vec2.clone(normals[4]); // HACK: push out diagonally down right
+			return vec2.clone(this.normals[4]); // HACK: push out diagonally down right
 		}
 
-		if (closest[0] == min[0]) {
-			return vec2.clone(normals[0]);
+		if (closest[0] == this.min[0]) {
+			return vec2.clone(this.normals[0]);
 		}
-		else if (closest[0] == max[0]) {
-			return vec2.clone(normals[1]);
+		else if (closest[0] == this.max[0]) {
+			return vec2.clone(this.normals[1]);
 		}
-		else if (closest[1] == min[1]) {
-			return vec2.clone(normals[2]);
+		else if (closest[1] == this.min[1]) {
+			return vec2.clone(this.normals[2]);
 		}
 
-		return vec2.clone(normals[3]);
-	};
+		return vec2.clone(this.normals[3]);
+	}
 
-	this.distanceToPoint = function(pt2) {
+	distanceToPoint(pt2: number[]): number {
 		return vec2.distance(this.closestPoint(pt2), pt2);
-	};
+	}
 }
 
+type Direction = "north" | "south" | "east" | "west";
 
-function Grid(width, height, cells, pathCells) {
-	var squares = [], sqix = 0;
-	for (var z=0; z<height; ++z) {
-		for (var x=0; x<width; ++x) {
-			if (cells[sqix])
-				squares[sqix] = new Square(x, z);
-			else
-				squares[sqix] = null;
+class Grid {
+	cells: boolean[];
+	path: boolean[];
+	width: number;
+	height: number;
+	private squares: (Square | null)[];
 
-			++sqix;
+	constructor(width: number, height: number, cells: boolean[], pathCells: boolean[]) {
+		this.squares = [];
+		var sqix = 0;
+		for (var z=0; z<height; ++z) {
+			for (var x=0; x<width; ++x) {
+				if (cells[sqix])
+					this.squares.push(new Square(x, z));
+				else
+					this.squares.push(null);
+
+				++sqix;
+			}
 		}
+
+		this.cells = cells;
+		this.path = pathCells;
+
+		this.width = width;
+		this.height = height;
 	}
 
-	this.cells = cells;
-	this.path = pathCells;
-
-	this.width = width;
-	this.height = height;
-
-	function at(x, z) {
-		return squares[(z>>0) * width + (x>>0)];
+	private at(x: number, z: number) {
+		return this.squares[(z >> 0) * this.width + (x>>0)];
 	}
 
-	function pathAt(x, z) {
-		return pathCells[(z>>0) * width + (x>>0)];
+	private pathAt(x: number, z: number) {
+		return this.path[(z >> 0) * this.width + (x>>0)];
 	}
 
-	this.pathExits = function(curPos, curDir) {
-		var x = curPos[0], z = curPos[1], exits = [];
-		assert(pathAt(x, z), "you're not on a path!");
+	pathExits(curPos: number[], curDir: Direction) {
+		const x = curPos[0], z = curPos[1], exits: { pos: number[], dir: Direction }[] = [];
+		assert(this.pathAt(x, z), "you're not on a path!");
 
-		if ((curDir != "south") && pathAt(x, z-1))
+		if ((curDir != "south") && this.pathAt(x, z-1))
 			exits.push({ pos: [x, z-1], dir: "north" });
 
-		if ((curDir != "east") && pathAt(x-1, z))
+		if ((curDir != "east") && this.pathAt(x-1, z))
 			exits.push({ pos: [x-1, z], dir: "west" });
 
-		if ((curDir != "north") && pathAt(x, z+1))
+		if ((curDir != "north") && this.pathAt(x, z+1))
 			exits.push({ pos: [x, z+1], dir: "south" });
 
-		if ((curDir != "west") && pathAt(x+1, z))
+		if ((curDir != "west") && this.pathAt(x+1, z))
 			exits.push({ pos: [x+1, z], dir: "east" });
 
 		return exits;
-	};
+	}
 
-	this.set = function(x, z, occupied) {
+	set(x: number, z: number, occupied: boolean) {
 		var sq = occupied ? new Square(x, z) : null;
-		squares[(z>>0) * width + (x>>0)] = sq;
-	};
+		this.squares[(z>>0) * this.width + (x>>0)] = sq;
+	}
 
-
-	this.castRay = function(from, direction) /* -> Square? */ {
+	castRay(from: number[], direction: number[]): Square | null {
 		// adapted from sample code at: http://lodev.org/cgtutor/raycasting.html
 		vec2.normalize(direction, direction);
 
@@ -282,7 +329,6 @@ function Grid(width, height, cells, pathCells) {
 		//length of ray from one x or y-side to next x or y-side
 		var deltaDistX = Math.sqrt(1 + (rayDirY * rayDirY) / (rayDirX * rayDirX));
 		var deltaDistY = Math.sqrt(1 + (rayDirX * rayDirX) / (rayDirY * rayDirY));
-		var perpWallDist;
 
 		//what direction to step in x or y-direction (either +1 or -1)
 		var stepX, stepY;
@@ -317,25 +363,24 @@ function Grid(width, height, cells, pathCells) {
 				mapY += stepY;
 			}
 
-			var sq = at(mapX, mapY);
+			var sq = this.at(mapX, mapY);
 			if (sq) return sq;
 		}
 
 		return null;
-	};
+	}
 
-
-	this.collideAndResolveCircle = function(posFrom, posTo, radius) /* -> vec2 */ {
+	collideAndResolveCircle(posFrom: number[], posTo: number[], radius: number): number[] {
 		var direction = vec2.create();
 		vec2.subtract(direction, posTo, posFrom);
 
-		var toCheck = [];
+		var toCheck: Square[] = [];
 		var minX = (posTo[0] - radius)<<0, maxX = (posTo[0] + radius)<<0;
 		var minZ = (posTo[1] - radius)<<0, maxZ = (posTo[1] + radius)<<0;
 
 		for (var tz = minZ; tz <= maxZ; ++tz) {
 			for (var tx = minX; tx <= maxX; ++tx) {
-				var sq = at(tx, tz);
+				var sq = this.at(tx, tz);
 				if (sq) toCheck.push(sq);
 			}
 		}
@@ -343,14 +388,14 @@ function Grid(width, height, cells, pathCells) {
 		if (! toCheck.length)
 			return posTo;
 
-		var closestSquare = null, closestDist = 99999;
-		toCheck.forEach(function(sq) {
+		let closestSquare = null, closestDist = 99999;
+		for (const sq of toCheck) {
 			var dist = sq.distanceToPoint(posTo);
 			if (dist < closestDist) {
 				closestDist = dist;
 				closestSquare = sq;
 			}
-		});
+		}
 
 		if (closestSquare && closestDist < radius) {
 			// not perfect but will work for now
@@ -360,51 +405,64 @@ function Grid(width, height, cells, pathCells) {
 		}
 
 		return posTo;
-	};
+	}
 }
 
 
-function Key(index) {
-	this.keyModel = new Model(state.meshes["key"]);
-	this.lockModel = new Model(state.meshes["lock"]);
-	this.index = index;
-	this.found = false;
-	this.keyPosition = vec3.create();
-	this.lockPosition = vec3.create();
-	this.radius = 0.5;
+class Key {
+	keyModel: Model;
+	lockModel: Model;
+	index: number;
+	found: boolean;
+	keyPosition: number[];
+	lockPosition: number[];
+	radius: number;
+	rotAxis: number[];
+	lockRotAxis: number[];
+	lockRotMax: number;
 
-	this.keyModel.setUniformScale(1);
-	this.lockModel.setUniformScale(0.02);
+	constructor(index: number) {
+		this.keyModel = new Model([state.meshes["key"]]);
+		this.lockModel = new Model([state.meshes["lock"]]);
+		this.index = index;
+		this.found = false;
+		this.keyPosition = vec3.create();
+		this.lockPosition = vec3.create();
+		this.radius = 0.5;
 
-	var scaledPos = vec3.create();
-	var rotAxis = vec3.fromValues(0, 1, 0);
+		this.keyModel.setUniformScale(1);
+		this.lockModel.setUniformScale(0.02);
 
-	var keyPositions = [
-		[4.5, .2, 8.5],
-		[52.5, .2, 8.5],
-		[4.5, .2, 48.5],
-		[52.5, .2, 48.5]
-	];
+		var scaledPos = vec3.create();
+		this.rotAxis = vec3.fromValues(0, 1, 0);
 
-	var lockPositions = [
-		[29.3, 2.3, 26.8],
-		[27.5, 2.3, 26.8],
-		[29.3, 0.6, 26.8],
-		[27.5, 0.6, 26.8]
-	];
+		this.lockRotAxis = [0,0,1],
+		this.lockRotMax = Math.PI / 40;
 
-	var lockRotAxis = [0,0,1],
-		lockRotMax = Math.PI / 40;
+		const keyPositions = [
+			[4.5, .2, 8.5],
+			[52.5, .2, 8.5],
+			[4.5, .2, 48.5],
+			[52.5, .2, 48.5]
+		];
 
-	vec3.copy(this.keyPosition, keyPositions[this.index]);
-	vec3.scale(scaledPos, this.keyPosition, LEVEL_SCALE);
-	this.keyModel.setPosition(scaledPos);
+		const lockPositions = [
+			[29.3, 2.3, 26.8],
+			[27.5, 2.3, 26.8],
+			[29.3, 0.6, 26.8],
+			[27.5, 0.6, 26.8]
+		];
 
-	vec3.copy(this.lockPosition, lockPositions[this.index]);
-	vec3.scale(scaledPos, this.lockPosition, LEVEL_SCALE);
-	this.lockModel.setPosition(scaledPos);
+		vec3.copy(this.keyPosition, keyPositions[this.index]);
+		vec3.scale(scaledPos, this.keyPosition, LEVEL_SCALE);
+		this.keyModel.setPosition(scaledPos);
 
-	this.update = function(dt) {
+		vec3.copy(this.lockPosition, lockPositions[this.index]);
+		vec3.scale(scaledPos, this.lockPosition, LEVEL_SCALE);
+		this.lockModel.setPosition(scaledPos);
+	}
+
+	update(_dt: number) {
 		if (this.found)
 			return;
 
@@ -417,30 +475,29 @@ function Key(index) {
 		}
 	};
 
-	this.draw = function() {
+	draw() {
 		if (! this.found) {
-	 		this.keyModel.setRotation(rotAxis, state.tCur * 1.3);
+	 		this.keyModel.setRotation(this.rotAxis, state.tCur * 1.3);
 			this.keyModel.draw(state.camera, state.modelProgram, 0);
 
-			var lrt = lockRotMax * Math.sin(state.tCur * 2);
-			this.lockModel.setRotation(lockRotAxis, lrt)
+			var lrt = this.lockRotMax * Math.sin(state.tCur * 2);
+			this.lockModel.setRotation(this.lockRotAxis, lrt)
 			this.lockModel.draw(state.camera, state.modelProgram, 0);
 		}
 	};
 }
 
 
-function makeDoorMesh(cornerColors) {
-	var vertexes = [], normals = [], colors = [], uvs = [];
+function makeDoorMesh(cornerColors: number[][]) {
+	const vertexes: number[] = [], normals: number[] = [], colors: number[] = [], uvs = [];
 
 	var xa = -1.5, xb = 1.5,
 		h = 3,
 		za = 0, zb = .5;
 
-	function vtx(x, y, z) { vertexes.push(x, y, z); }
-	function col(c) { colors.push(c[0], c[1], c[2]); }
-	function nrm6(nrm) { for(var n=0; n<6; ++n) normals.push(nrm[0], nrm[1], nrm[2]); }
-
+	function vtx(x: number, y: number, z: number) { vertexes.push(x, y, z); }
+	function col(c: number[]) { colors.push(c[0], c[1], c[2]); }
+	function nrm6(nrm: number[]) { for(var n=0; n<6; ++n) normals.push(nrm[0], nrm[1], nrm[2]); }
 
 	vtx(xb, h, za); col(cornerColors[0]); uvs.push(0,0);
 	vtx(xb, 0, za); col(cornerColors[2]); uvs.push(0,1);
@@ -466,27 +523,34 @@ function makeDoorMesh(cornerColors) {
 }
 
 
-function Door() {
-	this.mesh = makeDoorMesh(state.cornerColors);
-	this.model = new Model(this.mesh);
-	this.model.texture = state.textures["door"];
+class Door {
+	mesh: TriMesh;
+	model: Model;
+	state: "closed" | "opening" | "open";
+	position: number[];
+	openT0 = 0;
 
-	this.state = "closed";
+	constructor() {
+		this.mesh = makeDoorMesh(state.cornerColors);
+		this.model = new Model([this.mesh], state.textures["door"]);
 
-	this.position = vec3.fromValues(28.5, 0, 27);
+		this.state = "closed";
 
-	this.model.setUniformScale(4);
+		this.position = vec3.fromValues(28.5, 0, 27);
 
-	var scaledPos = vec3.create();
-	vec3.scale(scaledPos, this.position, LEVEL_SCALE);
-	this.model.setPosition(scaledPos);
+		this.model.setUniformScale(4);
 
-	// block the home base
-	state.grid.set(27, 27, true);
-	state.grid.set(28, 27, true);
-	state.grid.set(29, 27, true);
+		var scaledPos = vec3.create();
+		vec3.scale(scaledPos, this.position, LEVEL_SCALE);
+		this.model.setPosition(scaledPos);
 
-	this.update = function(dt) {
+		// block the home base
+		state.grid.set(27, 27, true);
+		state.grid.set(28, 27, true);
+		state.grid.set(29, 27, true);
+	}
+
+	update(_dt: number) {
 		if (this.state == "closed") {
 			var allKeys = state.keyItems.every(function(key) { return key.found; });
 
@@ -504,7 +568,7 @@ function Door() {
 			var step = Math.max(0, Math.min(1, (state.tCur - this.openT0) / 4));
 			this.position[0] = 28.5 + ((Math.random() - 0.5) * 0.03);
 			this.position[1] = -3 * step;
-			vec3.scale(scaledPos, this.position, LEVEL_SCALE);
+			const scaledPos = vec3.scale([], this.position, LEVEL_SCALE);
 			this.model.setPosition(scaledPos);
 
 			if (step == 1) {
@@ -515,21 +579,21 @@ function Door() {
 				this.state = "open";
 			}
 		}
-	};
+	}
 
-	this.draw = function() {
+	draw() {
 		this.model.draw(state.camera, state.texturedProgram, 0);
-	};
+	}
 }
 
 
-function End() {
-	this.position = [28.5, 29.5];
-	this.radius = 1;
-	this.fadeSec = 4;
-	this.T = -1;
+class End {
+	position = [28.5, 29.5];
+	radius = 1;
+	fadeSec = 4;
+	T = -1;
 
-	this.update = function(dt) {
+	update(_dt: number) {
 		var playerPos = vec2.fromValues(state.player.position[0], state.player.position[2]);
 		if (vec2.distance(playerPos, this.position) < this.radius) {
 			this.T = state.tCur;
@@ -545,41 +609,40 @@ function End() {
 			show("#victory");
 			mode = "victory";
 		}
-	};
+	}
 
-	this.draw = function() {
-	};
+	draw() {
+	}
 }
 
 
-function Player() {
-	this.model = new Model(state.meshes["spookje"]);
-	this.position = vec3.fromValues(0, 0.3, 0); // grid units
-	this.viewAngle = Math.PI / -2; // radians
-	this.turnSpeed = Math.PI; // radians / sec
-	this.speed = 2.3; // grid units / sec
-	this.radius = .25; // grid units
-	this.dieT = -1;
+class Player {
+	model = new Model([state.meshes["spookje"]]);
+	position = vec3.fromValues(0, 0.3, 0); // grid units
+	viewAngle = Math.PI / -2; // radians
+	turnSpeed = Math.PI; // radians / sec
+	speed = 2.3; // grid units / sec
+	radius = .25; // grid units
+	dieT = -1;
+	rotAxis = vec3.fromValues(0, 1, 0);
+	moveMat = mat2.create();
+	movePos = vec2.create();
 
-	this.model.setUniformScale(1);
+	constructor() {
+		this.model.setUniformScale(1);
+	}
 
-	var scaledPos = vec3.create();
-	var rotAxis = vec3.fromValues(0, 1, 0);
-
-	this.moveTo2D = function(x, z) {
+	moveTo2D(x: number, z: number) {
 		vec3.set(this.position, x, this.position[1], z);
-	};
+	}
 
-	var moveMat = mat2.create();
-	var movePos = vec2.create();
-
-	this.die = function() {
+	die() {
 		if (this.dieT < 0) {
 			this.dieT = state.tCur;
 		}
-	};
+	}
 
-	this.update = function(dt) {
+	update(dt: number) {
 		if (this.dieT >= 0) {
 			var meltStep = (state.tCur - this.dieT) / 4;
 			var meltClamp = Math.max(0, Math.min(1, meltStep));
@@ -614,14 +677,14 @@ function Player() {
 			}
 
 			if (speed != 0) {
-				mat2.fromRotation(moveMat, this.viewAngle);
-				mat2.scale(moveMat, moveMat, [speed * dt, speed * dt]);
-				vec2.set(movePos, 1, 0);
-				vec2.transformMat2(movePos, movePos, moveMat);
+				mat2.fromRotation(this.moveMat, this.viewAngle);
+				mat2.scale(this.moveMat, this.moveMat, [speed * dt, speed * dt]);
+				vec2.set(this.movePos, 1, 0);
+				vec2.transformMat2(this.movePos, this.movePos, this.moveMat);
 
 				var oldPos = vec2.fromValues(this.position[0], this.position[2]);
 				var newPos = vec2.create();
-				vec2.add(newPos, oldPos, movePos);
+				vec2.add(newPos, oldPos, this.movePos);
 
 				newPos = state.grid.collideAndResolveCircle(oldPos, newPos, this.radius);
 
@@ -638,73 +701,71 @@ function Player() {
 
 		// -- they all float down here
 		this.position[1] = 0.35 + 0.05 * Math.sin(state.tCur * 3);
-	};
+	}
 
-	this.draw = function() {
-		vec3.scale(scaledPos, this.position, LEVEL_SCALE);
+	draw() {
+		const scaledPos = vec3.scale([], this.position, LEVEL_SCALE);
 		this.model.setPosition(scaledPos);
-		this.model.setRotation(rotAxis, -this.viewAngle);
+		this.model.setRotation(this.rotAxis, -this.viewAngle);
 		this.model.draw(state.camera, state.modelProgram, 0);
-	};
+	}
 }
 
 
-function Abomination(index) {
-	this.model = new Model(state.meshes["pac1"], state.meshes["pac2"]);
-	this.model.texture = state.textures["crackpac"];
+class Abomination {
+	model = new Model([state.meshes["pac1"], state.meshes["pac2"]], state.textures["crackpac"]);
+	phase = "move";
+	nextDir: Direction = "north";
+	pathStep = 0;
+	lastStepT = 0;
+	stepDuration = 0.33;
+	turnDuration = 0.6;
+	radius = 1.4;
+	rotAxis = vec3.fromValues(0, 1, 0);
+	direction: Direction;
+	pathPos: number[];
 
-	this.model.setUniformScale(5);
-	this.phase = "move";
-
-	this.spawnData = [
+	static spawnData: { direction: Direction, pathPos: number[] }[] = [
 		{ direction: "north", pathPos: [43, 18] },
 		{ direction: "west", pathPos: [13, 4] },
 		{ direction: "south", pathPos: [4, 43] },
 		{ direction: "north", pathPos: [49, 52] },
 		{ direction: "west", pathPos: [28, 36] }
 	];
-
-	this.direction = this.spawnData[index].direction;
-	this.nextDir = "";
-	this.pathPos = vec2.clone(this.spawnData[index].pathPos);
-	this.pathStep = 0;
-	this.lastStepT = 0;
-	this.stepDuration = 0.33;
-	this.turnDuration = 0.6;
-	this.radius = 1.4;
-
-	this.rotations = {
+	static rotations = {
 		north: Math.PI,
 		west: Math.PI / -2,
 		south: 0,
 		east: Math.PI / 2
 	};
-	this.directionVecs = {
-		north: [0,-1],
-		west: [-1,0],
-		south: [0,1],
-		east: [1,0]
+	static directionVecs = {
+		north: [0, -1],
+		west: [-1, 0],
+		south: [0, 1],
+		east: [1, 0]
 	};
-	var rotAxis = vec3.fromValues(0,1,0);
 
-	var scaledPos = vec3.create();
-	var moveOffset = vec3.create();
+	constructor(index: number) {
+		this.model.setUniformScale(5);
+		this.direction = Abomination.spawnData[index].direction;
+		this.pathPos = vec2.clone(Abomination.spawnData[index].pathPos);
+	}
 
-	this.update = function(dt) {
+	update(_dt: number) {
 		if (this.phase == "move") {
 			if (state.tCur - this.lastStepT > this.stepDuration) {
 				this.pathStep++;
 				this.lastStepT = state.tCur;
-				var dirVec2 = this.directionVecs[this.direction];
+				var dirVec2 = Abomination.directionVecs[this.direction];
 				var dirVec3 = vec3.fromValues(dirVec2[0], 0, dirVec2[1]);
 
-				vec3.scale(moveOffset, dirVec3, this.pathStep / 2);
-				vec3.set(scaledPos, this.pathPos[0] + 0.5, 0, this.pathPos[1] + 0.5);
+				const moveOffset = vec3.scale([0, 0, 0], dirVec3, this.pathStep / 2);
+				const scaledPos = vec3.set([0, 0, 0], this.pathPos[0] + 0.5, 0, this.pathPos[1] + 0.5);
 				vec3.add(scaledPos, scaledPos, moveOffset);
 
 				vec3.scale(scaledPos, scaledPos, LEVEL_SCALE);
 				this.model.setPosition(scaledPos);
-				this.model.setRotation(rotAxis, this.rotations[this.direction]);
+				this.model.setRotation(this.rotAxis, Abomination.rotations[this.direction]);
 
 				// moved 1 full tile
 				if (this.pathStep == 2) {
@@ -725,8 +786,8 @@ function Abomination(index) {
 			var step = Math.max(0, Math.min(1, (state.tCur - this.lastStepT) / this.turnDuration));
 			step = step * step;
 
-			var fromAngle = this.rotations[this.direction];
-			var toAngle = this.rotations[this.nextDir];
+			var fromAngle = Abomination.rotations[this.direction];
+			var toAngle = Abomination.rotations[this.nextDir];
 			var rotation = toAngle - fromAngle;
 			if (rotation < (Math.PI * -1.01)) {
 				rotation += Math.PI * 2;
@@ -735,12 +796,12 @@ function Abomination(index) {
 				rotation -= Math.PI * 2;
 			}
 
-			this.model.setRotation(rotAxis, fromAngle + rotation * step);
+			this.model.setRotation(this.rotAxis, fromAngle + rotation * step);
 
 			if (step >= 1.0) {
 				this.phase = "move";
 				this.direction = this.nextDir;
-				this.nextDir = "";
+				// this.nextDir = "";
 				this.lastStepT = state.tCur;
 			}
 		}
@@ -755,13 +816,13 @@ function Abomination(index) {
 
 	};
 
-	this.draw = function() {
+	draw() {
 		this.model.draw(state.camera, state.texturedProgram, 1 - (this.pathStep & 1));
 	};
 }
 
 
-function drawScene(camera) {
+function drawScene(camera: Camera) {
 	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
 	// -- PLAIN MODELS
@@ -784,88 +845,12 @@ function drawScene(camera) {
 	state.pacs.forEach(function(pac) { pac.draw(); });
 }
 
-
-function getShader(id) {
-	var shaderScript = document.getElementById(id);
-	assert(shaderScript, "no such shader: " + id);
-
-	var shader;
-	if (shaderScript.type == "x-shader/x-fragment") {
-		shader = gl.createShader(gl.FRAGMENT_SHADER);
-	} else if (shaderScript.type == "x-shader/x-vertex") {
-		shader = gl.createShader(gl.VERTEX_SHADER);
-	} else {
-		assert(false, id + " does not seem to be a shader");
-	}
-
-	gl.shaderSource(shader, shaderScript.textContent);
-	gl.compileShader(shader);
-
-	if (! gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-		alert(gl.getShaderInfoLog(shader));
-		assert(false, "bad shader");
-	}
-
-	return shader;
-}
-
-
-function createStandardTexture(fileName, then) {
-	var texture = gl.createTexture();
-	var image = new Image();
-	image.onload = function() {
-		gl.bindTexture(gl.TEXTURE_2D, texture);
-// 		gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-		gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
-		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-		gl.bindTexture(gl.TEXTURE_2D, null);
-
-		then(texture);
-	};
-
-	image.src = fileName;
-}
-
-
-function createStandardProgram(vertID, fragID) {
-	var program = gl.createProgram();
-	gl.attachShader(program, getShader(vertID));
-	gl.attachShader(program, getShader(fragID));
-	gl.linkProgram(program);
-
-	if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-		alert("Could not initialise shaders");
-	}
-
-	gl.useProgram(program);
-
-	program.vertexPositionAttribute = gl.getAttribLocation(program, "vertexPos_model");
-	program.vertexColorAttribute = gl.getAttribLocation(program, "vertexColor");
-	program.vertexNormalAttribute = gl.getAttribLocation(program, "vertexNormal");
-	program.vertexUVAttribute = gl.getAttribLocation(program, "vertexUV");
-
-	program.projMatrixUniform = gl.getUniformLocation(program, "projectionMatrix");
-	program.mvMatrixUniform = gl.getUniformLocation(program, "modelViewMatrix");
-	program.normalMatrixUniform = gl.getUniformLocation(program, "normalMatrix");
-	program.textureUniform = gl.getUniformLocation(program, "diffuseSampler");
-	program.timeUniform = gl.getUniformLocation(program, "currentTime");
-
-	gl.useProgram(null);
-
-	return program;
-}
-
-
-function setupGL(then) {
-	var canvas = document.getElementById("stage");
-	var camera;
+function setupGL(then: (c: Camera) => void) {
+	const canvas = document.getElementById("stage") as HTMLCanvasElement;
 	try {
-		gl = canvas.getContext("webgl");
-		if (! gl)
-			gl = canvas.getContext("experimental-webgl");
+		gl = canvas.getContext("webgl")!;
 	} catch (e) {
-		gl = null;
+		// gl = null;
 	}
 
 	if (! gl) {
@@ -877,7 +862,6 @@ function setupGL(then) {
 		then(new Camera(canvas));
 	}
 }
-
 
 function nextFrame() {
 	state.tCur = (Date.now() / 1000.0) - state.t0;
@@ -940,21 +924,30 @@ function showTitle() {
 
 
 function init() {
+	state = {
+		keys: [],
+		keyItems: [],
+		textures: {},
+		meshes: {},
+		models: {},
+		pacs: []
+	} as any as State;
+
 	setupGL(function(camera) {
 		state.camera = camera;
-		state.modelProgram = createStandardProgram("standardVert", "standardFrag");
-		state.texturedProgram = createStandardProgram("texturedVert", "texturedFrag");
+		state.modelProgram = createStandardProgram(gl, "standardVert", "standardFrag");
+		state.texturedProgram = createStandardProgram(gl, "texturedVert", "texturedFrag");
 
-		window.onkeydown = function(evt) {
+		window.onkeydown = function(evt: KeyboardEvent) {
 			var kc = evt.keyCode;
 			state.keys[kc] = true;
-			if (! evt.modifiers)
+			if (! evt.metaKey)
 				evt.preventDefault();
 		};
-		window.onkeyup = function(evt) {
+		window.onkeyup = function(evt: KeyboardEvent) {
 			var kc = evt.keyCode;
 			state.keys[kc] = false;
-			if (! evt.modifiers)
+			if (! evt.metaKey)
 				evt.preventDefault();
 		};
 		window.onblur = function() { active = false; state.keys = []; };
@@ -978,7 +971,7 @@ function init() {
 
 		genMapMesh(gl, function(mapData) {
 			state.meshes["map"] = mapData.mesh;
-			state.models["map"] = new Model(mapData.mesh);
+			state.models["map"] = new Model([mapData.mesh]);
 			state.camera.fixedPoints = mapData.cameras;
 			state.grid = new Grid(mapData.gridW, mapData.gridH, mapData.grid, mapData.path);
 			state.cornerColors = mapData.cornerColors;
@@ -986,10 +979,10 @@ function init() {
 			var pacColor = u8Color(213, 215, 17);
 
 			// Promises are for wimps
-			createStandardTexture("assets/doortex.png", function(doorTex) {
+			createStandardTexture(gl, "assets/doortex.png", function(doorTex) {
 				state.textures["door"] = doorTex;
 
-				createStandardTexture("assets/crackpac.png", function(pacTex) {
+				createStandardTexture(gl, "assets/crackpac.png", function(pacTex) {
 					state.textures["crackpac"] = pacTex;
 
 					loadObjFile("assets/pac1.obj", function(pac1Data) {
@@ -1002,15 +995,15 @@ function init() {
 
 							loadObjFile("assets/key.obj", function(keyData) {
 								var keyColors = genColorArray(u8Color(201,163,85), keyData.elements);
-								state.meshes["key"] = new TriMesh(gl, keyData.vertexes, keyData.normals, keyColors, null);
+								state.meshes["key"] = new TriMesh(gl, keyData.vertexes, keyData.normals, keyColors);
 
 								loadObjFile("assets/lock.obj", function(lockData) {
 									var lockColors = genColorArray(u8Color(0x66,0x77,0x88), lockData.elements);
-									state.meshes["lock"] = new TriMesh(gl, lockData.vertexes, lockData.normals, lockColors, null);
+									state.meshes["lock"] = new TriMesh(gl, lockData.vertexes, lockData.normals, lockColors);
 
 									loadObjFile("assets/spookje.obj", function(spookjeData) {
 										var spookjeColors = genColorArray(u8Color(255,184,221), spookjeData.elements);
-										state.meshes["spookje"] = new TriMesh(gl, spookjeData.vertexes, spookjeData.normals, spookjeColors, null);
+										state.meshes["spookje"] = new TriMesh(gl, spookjeData.vertexes, spookjeData.normals, spookjeColors);
 
 										showTitle();
 									});

@@ -5,21 +5,37 @@ import { u8Color, TriMesh } from "./asset.js";
 
 export const LEVEL_SCALE = 4.0;
 
-vec2.equals = function(a, b) {
+declare const vec2: any;
+declare const vec3: any;
+declare const vec4: any;
+
+vec2.equals = function(a: number[], b: number[]) {
 	return a[0] == b[0] && a[1] == b[1];
 };
 
-function buildMapFromImageData(gl, pix) {
-	var inuse = 0, pixw = pix.width, pixh = pix.height;
-	var data = pix.data, offset = 0, gridOffset = 0;
+export type CameraPoint = number[] & { doorCam: boolean };
 
-	var HEIGHT = 25.0;       // will appear inf high
+export interface MapData {
+	cameras: CameraPoint[];
+	grid: boolean[];
+	path: boolean[];
+	gridW: number;
+	gridH: number;
+	mesh: TriMesh;
+	cornerColors: number[][];
+}
 
-	var vertexes = [], normals = [], colors = [], cameras = [], grid = [], path = [];
+function buildMapFromImageData(gl: WebGLRenderingContext, pix: ImageData): MapData {
+	const data = pix.data, pixw = pix.width, pixh = pix.height;
+	let inuse = 0, offset = 0, gridOffset = 0;
 
-	function vtx(x, y, z) { vertexes.push(x, y, z); }
-	function nrm6(nrm) { for(var n=0; n<6; ++n) normals.push(nrm[0], nrm[1], nrm[2]); }
-	function col6(colT, colB) {
+	const HEIGHT = 25.0;       // will appear inf high
+
+	const vertexes: number[] = [], normals: number[] = [], colors: number[] = [], cameras = [], grid = [], path = [];
+
+	function vtx(x: number, y: number, z: number) { vertexes.push(x, y, z); }
+	function nrm6(nrm: number[]) { for(var n=0; n<6; ++n) normals.push(nrm[0], nrm[1], nrm[2]); }
+	function col6(colT: number[], colB: number[]) {
 		colors.push(colT[0], colT[1], colT[2]);
 		colors.push(colB[0], colB[1], colB[2]);
 		colors.push(colB[0], colB[1], colB[2]);
@@ -29,19 +45,19 @@ function buildMapFromImageData(gl, pix) {
 		colors.push(colT[0], colT[1], colT[2]);
 	}
 
-	var north = [0, 0, -1],        // normals of the sides
+	const north = [0, 0, -1],        // normals of the sides
 		west  = [-1, 0, 0],
 		south = [0, 0, 1],
 		east  = [1, 0, 0];
 
-	var corners = [
+	const corners = [
 		[0, 0],
 		[pixw, 0],
 		[0, pixh],
 		[pixw, pixh]
 	];
 
-	var cornerColors = [
+	const cornerColors = [
 		u8Color(32, 43, 222),
 		u8Color(255, 184, 71),
 		u8Color(255, 37, 0),
@@ -50,16 +66,16 @@ function buildMapFromImageData(gl, pix) {
 		u8Color(0xff, 0xd7, 0x00)  // homebase
 	];
 
-	var topDarkenFactor = 0.65,
+	const topDarkenFactor = 0.65,
 		botDarkenFactor = 0.30;    // bottom vertices are darker than top ones
 
 	// home base in the grid
-	var homeBaseMin = [21,26],
+	const homeBaseMin = [21,26],
 		homeBaseMax = [35,34];
-	var	doorCameraLoc = [28,23];
+	const doorCameraLoc = [28,23];
 
-	for (var z=0; z < pixh; ++z) {
-		for (var x=0; x < pixw; ++x) {
+	for (let z=0; z < pixh; ++z) {
+		for (let x=0; x < pixw; ++x) {
 			grid[gridOffset] = false;
 			path[gridOffset] = false;
 
@@ -187,36 +203,36 @@ function buildMapFromImageData(gl, pix) {
 	console.info("vtx", vertexes.length / 3, "cams", cameras.length);
 
 	return {
-		cameras: cameras,
-		grid: grid,
-		path: path,
+		cameras,
+		grid,
+		path,
 		gridW: pixw,
 		gridH: pixh,
 		mesh: new TriMesh(gl, vertexes, normals, colors),
-		cornerColors: cornerColors
+		cornerColors
 	};
 }
 
 
-export function genMapMesh(gl, then) {
-	var img = new Image();
+export function genMapMesh(gl: WebGLRenderingContext, then: (md: MapData) => void) {
+	const img = new Image();
 	img.src = "assets/levelx_.png";
 	img.onload = function() {
-		var t0 = performance.now();
-		var cvs = document.createElement("canvas");
+		const t0 = performance.now();
+		const cvs = document.createElement("canvas");
 		cvs.width = img.width;
 		cvs.height = img.height;
 
-		var ctx = cvs.getContext("2d");
-		ctx.webkitImageSmoothingEnabled = false; // NO
-		ctx.mozImageSmoothingEnabled = false;
-		ctx.msImageSmoothingEnabled = false;
+		var ctx = cvs.getContext("2d")!;
+		(ctx as any).webkitImageSmoothingEnabled = false; // NO
+		(ctx as any).mozImageSmoothingEnabled = false;
+		(ctx as any).msImageSmoothingEnabled = false;
 		ctx.imageSmoothingEnabled = false;
 
 		ctx.drawImage(img, 0, 0);
-		var pix = ctx.getImageData(0, 0, cvs.width, cvs.height);
-		var map = buildMapFromImageData(gl, pix);
-		var t1 = performance.now();
+		const pix = ctx.getImageData(0, 0, cvs.width, cvs.height);
+		const map = buildMapFromImageData(gl, pix);
+		const t1 = performance.now();
 
 		console.info("mapGen took", (t1-t0), "ms");
 

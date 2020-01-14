@@ -3,18 +3,25 @@
 
 import { assert } from "./util.js";
 
-function loadObj(text, then) {
-	var t0 = performance.now();
-	var lines = text.split("\n");
-	var vv = [], nn = [], tt = [];
-	var vertexes = [], normals = [], uvs = [];
+export interface ObjData {
+	elements: number;
+	vertexes: number[];
+	normals: number[];
+	uvs: number[];
+}
 
-	function vtx(vx, tx, nx) {
+function loadObj(text: string, then: (d: ObjData) => void) {
+	const t0 = performance.now();
+	const lines = text.split("\n");
+	const vv: number[][] = [], nn: number[][] = [], tt: number[][] = [];
+	const vertexes: number[] = [], normals: number[] = [], uvs: number[] = [];
+
+	function vtx(vx: number, tx: number, nx: number) {
 		assert(vx < vv.length, "vx out of bounds " + vx);
 		assert(tx < tt.length, "tx out of bounds " + tx);
 		assert(nx < nn.length, "nx out of bounds " + nx);
 
-		var v = vv[vx],
+		const v = vv[vx],
 			t = tx > -1 ? tt[tx] : null,
 			n = nn[nx];
 
@@ -25,7 +32,7 @@ function loadObj(text, then) {
 	}
 
 	// convert a face index to zero-based int or -1 for empty index
-	function fxtoi(fx) {return (+fx) - 1;}
+	function fxtoi(fx: string) {return (+fx) - 1;}
 
 	lines.forEach(function(line) {
 		var tokens = line.split(" ");
@@ -40,9 +47,9 @@ function loadObj(text, then) {
 				tt.push([parseFloat(tokens[1]), parseFloat(tokens[2])]);
 				break;
 			case "f":
-				vtx.apply(null, tokens[1].split("/").map(fxtoi));
-				vtx.apply(null, tokens[2].split("/").map(fxtoi));
-				vtx.apply(null, tokens[3].split("/").map(fxtoi));
+				vtx.apply(null, tokens[1].split("/").map(fxtoi) as any);
+				vtx.apply(null, tokens[2].split("/").map(fxtoi) as any);
+				vtx.apply(null, tokens[3].split("/").map(fxtoi) as any);
 				break;
 
 			default: break;
@@ -51,17 +58,17 @@ function loadObj(text, then) {
 
 	var t1 = performance.now();
 	console.info("obj v:", vertexes.length / 3, "n:", normals.length / 3, "t:", uvs.length / 2, "took:", (t1-t0) | 0, "ms");
-	then({ elements: vertexes.length / 3, vertexes: vertexes, normals: normals, uvs: uvs });
+	then({ elements: vertexes.length / 3, vertexes, normals, uvs });
 }
 
 
-export function loadObjFile(fileName, then) {
-	var xhr = new XMLHttpRequest();
+export function loadObjFile(fileName: string, then: (d: ObjData) => void) {
+	const xhr = new XMLHttpRequest();
 	xhr.open("GET", fileName);
 
 	xhr.onreadystatechange = function() {
 		if (xhr.readyState != 4) return;
-		assert(xhr.status == 200 || xhr.status == 0);
+		assert(xhr.status == 200 || xhr.status === 0);
 		loadObj(xhr.responseText, then);
 	};
 	xhr.send();
