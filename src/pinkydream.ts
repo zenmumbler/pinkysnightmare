@@ -2,16 +2,11 @@
 // An entry for LD33 Game Jampo — You are the Monster
 // (c) 2015 by Arthur Langereis — @zenmumbler
 
+import { vec2, vec3, mat2, mat3, mat4 } from "stardazed/vector";
 import { $1, on, show, hide, assert } from "./util.js";
 import { createStandardProgram, createStandardTexture, TriMesh, u8Color, StandardProgram } from "./asset.js";
 import { LEVEL_SCALE, genMapMesh, CameraPoint } from "./levelgen.js";
 import { loadObjFile } from "./objloader.js";
-
-declare const vec2: any;
-declare const vec3: any;
-declare const mat2: any;
-declare const mat3: any;
-declare const mat4: any;
 
 var gl: WebGLRenderingContext;
 
@@ -103,11 +98,11 @@ class Model {
 		mat4.fromScaling(this.scaleMat, [sx, sy, sz]);
 	}
 
-	setPosition(v3: number[]) {
+	setPosition(v3: NumArray) {
 		mat4.fromTranslation(this.transMat, v3);
 	}
 
-	setRotation(axis: number[], angle: number) {
+	setRotation(axis: NumArray, angle: number) {
 		mat4.fromRotation(this.rotMat, angle, axis);
 	};
 }
@@ -119,8 +114,8 @@ function deg2rad(deg: number) {
 
 
 class Camera {
-	projectionMatrix: number[];
-	viewMatrix: number[];
+	projectionMatrix: Float32Array;
+	viewMatrix: Float32Array;
 	fixedPoints!: CameraPoint[];
 
 	constructor(canvas: HTMLCanvasElement) {
@@ -194,9 +189,9 @@ class Camera {
 
 
 class Square {
-	min: number[];
-	max: number[];
-	center: number[];
+	min: NumArray;
+	max: NumArray;
+	center: NumArray;
 
 	normals = [
 		vec2.fromValues(-1, 0), // left
@@ -212,18 +207,18 @@ class Square {
 		this.center = vec2.fromValues(x + .5, y + .5);
 	}
 
-	closestPoint(pt2: number[]): number[] {
+	closestPoint(pt2: NumArray): NumArray {
 		var closest = vec2.create();
 		vec2.max(closest, this.min, pt2);
 		vec2.min(closest, this.max, closest);
 		return closest;
 	}
 
-	containsPoint(pt2: number[]): boolean {
+	containsPoint(pt2: NumArray): boolean {
 		return vec2.equals(this.closestPoint(pt2), pt2);
 	}
 
-	normalAtClosestPoint(pt2: number[]): number[] {
+	normalAtClosestPoint(pt2: NumArray): NumArray {
 		var closest = this.closestPoint(pt2);
 
 		if (vec2.equals(closest, pt2)) { // pt2 contained in box
@@ -243,7 +238,7 @@ class Square {
 		return vec2.clone(this.normals[3]);
 	}
 
-	distanceToPoint(pt2: number[]): number {
+	distanceToPoint(pt2: NumArray): number {
 		return vec2.distance(this.closestPoint(pt2), pt2);
 	}
 }
@@ -286,7 +281,7 @@ class Grid {
 		return this.path[(z >> 0) * this.width + (x>>0)];
 	}
 
-	pathExits(curPos: number[], curDir: Direction) {
+	pathExits(curPos: NumArray, curDir: Direction) {
 		const x = curPos[0], z = curPos[1], exits: { pos: number[], dir: Direction }[] = [];
 		assert(this.pathAt(x, z), "you're not on a path!");
 
@@ -310,7 +305,7 @@ class Grid {
 		this.squares[(z>>0) * this.width + (x>>0)] = sq;
 	}
 
-	castRay(from: number[], direction: number[]): Square | null {
+	castRay(from: NumArray, direction: NumArray): Square | null {
 		// adapted from sample code at: http://lodev.org/cgtutor/raycasting.html
 		vec2.normalize(direction, direction);
 
@@ -370,7 +365,7 @@ class Grid {
 		return null;
 	}
 
-	collideAndResolveCircle(posFrom: number[], posTo: number[], radius: number): number[] {
+	collideAndResolveCircle(posFrom: NumArray, posTo: NumArray, radius: number): NumArray {
 		var direction = vec2.create();
 		vec2.subtract(direction, posTo, posFrom);
 
@@ -414,11 +409,11 @@ class Key {
 	lockModel: Model;
 	index: number;
 	found: boolean;
-	keyPosition: number[];
-	lockPosition: number[];
+	keyPosition: NumArray;
+	lockPosition: NumArray;
 	radius: number;
-	rotAxis: number[];
-	lockRotAxis: number[];
+	rotAxis: NumArray;
+	lockRotAxis: NumArray;
 	lockRotMax: number;
 
 	constructor(index: number) {
@@ -527,7 +522,7 @@ class Door {
 	mesh: TriMesh;
 	model: Model;
 	state: "closed" | "opening" | "open";
-	position: number[];
+	position: MutNumArray;
 	openT0 = 0;
 
 	constructor() {
@@ -683,7 +678,7 @@ class Player {
 				vec2.transformMat2(this.movePos, this.movePos, this.moveMat);
 
 				var oldPos = vec2.fromValues(this.position[0], this.position[2]);
-				var newPos = vec2.create();
+				var newPos: MutNumArray = vec2.create();
 				vec2.add(newPos, oldPos, this.movePos);
 
 				newPos = state.grid.collideAndResolveCircle(oldPos, newPos, this.radius);
@@ -723,7 +718,7 @@ class Abomination {
 	radius = 1.4;
 	rotAxis = vec3.fromValues(0, 1, 0);
 	direction: Direction;
-	pathPos: number[];
+	pathPos: NumArray;
 
 	static spawnData: { direction: Direction, pathPos: number[] }[] = [
 		{ direction: "north", pathPos: [43, 18] },

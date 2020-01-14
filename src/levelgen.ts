@@ -1,19 +1,12 @@
 // Part of Pinky's Nightmare
 // (c) 2015 by Arthur Langereis - @zenmumbler
 
+import { vec2, vec3, vec4 } from "stardazed/vector";
 import { u8Color, TriMesh } from "./asset.js";
 
 export const LEVEL_SCALE = 4.0;
 
-declare const vec2: any;
-declare const vec3: any;
-declare const vec4: any;
-
-vec2.equals = function(a: number[], b: number[]) {
-	return a[0] == b[0] && a[1] == b[1];
-};
-
-export type CameraPoint = number[] & { doorCam: boolean };
+export type CameraPoint = NumArray & { doorCam: boolean };
 
 export interface MapData {
 	cameras: CameraPoint[];
@@ -31,11 +24,11 @@ function buildMapFromImageData(gl: WebGLRenderingContext, pix: ImageData): MapDa
 
 	const HEIGHT = 25.0;       // will appear inf high
 
-	const vertexes: number[] = [], normals: number[] = [], colors: number[] = [], cameras = [], grid = [], path = [];
+	const vertexes: number[] = [], normals: number[] = [], colors: number[] = [], cameras: CameraPoint[] = [], grid = [], path = [];
 
 	function vtx(x: number, y: number, z: number) { vertexes.push(x, y, z); }
-	function nrm6(nrm: number[]) { for(var n=0; n<6; ++n) normals.push(nrm[0], nrm[1], nrm[2]); }
-	function col6(colT: number[], colB: number[]) {
+	function nrm6(nrm: NumArray) { for(var n=0; n<6; ++n) normals.push(nrm[0], nrm[1], nrm[2]); }
+	function col6(colT: NumArray, colB: NumArray) {
 		colors.push(colT[0], colT[1], colT[2]);
 		colors.push(colB[0], colB[1], colB[2]);
 		colors.push(colB[0], colB[1], colB[2]);
@@ -98,12 +91,14 @@ function buildMapFromImageData(gl: WebGLRenderingContext, pix: ImageData): MapDa
 
 				if (data[offset+1] == 255) {
 					if (vec2.equals([x,z], doorCameraLoc)) {
-						var dc = vec2.fromValues(x + .5, z + .1);
+						const dc: any = vec2.fromValues(x + .5, z + .1);
 						dc.doorCam = true;
 						cameras.push(dc);
 					}
 					else {
-						cameras.push(vec2.fromValues(x + .5, z + .5));
+						const dc: any = vec2.fromValues(x + .5, z + .5);
+						dc.doorCam = false;
+						cameras.push(dc);
 					}
 				}
 
