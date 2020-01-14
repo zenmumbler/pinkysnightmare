@@ -6,7 +6,7 @@ function loadObj(text, then) {
 	var lines = text.split("\n");
 	var vv = [], nn = [], tt = [];
 	var vertexes = [], normals = [], uvs = [];
-	
+
 	function vtx(vx, tx, nx) {
 		assert(vx < vv.length, "vx out of bounds " + vx);
 		assert(tx < tt.length, "tx out of bounds " + tx);
@@ -22,9 +22,9 @@ function loadObj(text, then) {
 			uvs.push(t[0], t[1]);
 	}
 
-	// convert a face index to zero-based int or -1 for empty index	
+	// convert a face index to zero-based int or -1 for empty index
 	function fxtoi(fx) {return (+fx) - 1;}
-	
+
 	lines.forEach(function(line) {
 		var tokens = line.split(" ");
 		switch (tokens[0]) {
@@ -53,7 +53,7 @@ function loadObj(text, then) {
 }
 
 
-function loadObjFile(fileName, then) {
+export function loadObjFile(fileName, then) {
 	var xhr = new XMLHttpRequest();
 	xhr.open("GET", fileName);
 

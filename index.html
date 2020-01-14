@@ -32,12 +32,12 @@
 <body>
 <div style="width: 960px; height: 540px; margin: 150px auto 50px auto; position: relative;">
 	<canvas style="position: absolute; z-index: 3" width="960" height="540" id="stage"></canvas>
-	<div id="run" style="position: absolute; z-index: 2; width: 100%; height: 100%; background: transparent url(title.png) no-repeat 0 0;"></div>	
+	<div id="run" style="position: absolute; z-index: 2; width: 100%; height: 100%; background: transparent url(title.png) no-repeat 0 0;"></div>
 	<div id="victory" style="position: absolute; z-index: 1; width: 100%; height: 100%; background: transparent url(victory.png) no-repeat 0 0;">
 		<p style="position: absolute; top: 300px; left: 0; right: 0; text-align: center; height: 40px; font-size: 40px">
 			You took <span id="minutes">0</span> minutes and <span id="seconds">0</span> seconds to win.
 		</p>
-	</div>	
+	</div>
 </div>
 
 <div class="meta">
@@ -74,9 +74,9 @@ function assert(cond, msg) {
 }
 </script>
 <script src="gl-matrix-min.js"></script>
-<script src="objloader.js"></script>
-<script src="levelgen.js"></script>
-<script src="pinkydream.js"></script>
+<!-- <script src="objloader.js"></script>
+<script src="levelgen.js"></script> -->
+<script type="module" src="pinkydream.js"></script>
 
 
 <script id="standardVert" type="x-shader/x-vertex">
@@ -110,7 +110,7 @@ function assert(cond, msg) {
 
 	void main(void) {
 		vec3 fogColor = vec3(0.1, 0.0, 0.05);
-		
+
 		const float fogDistance = 8.0;
 		float fogDensity = clamp((length(vertexPos_cam_intp) - fogDistance) / 32.0, 0.0, 0.95);
 		vec3 outColor = vec3(mix(vertexColor_intp, fogColor, fogDensity));
@@ -129,7 +129,7 @@ function assert(cond, msg) {
 	uniform mat4 modelViewMatrix;
 	uniform mat4 projectionMatrix;
 	uniform mat3 normalMatrix;
-	
+
 	varying vec3 vertexPos_cam_intp;
 	varying vec3 vertexColor_intp;
 	varying vec3 vertexNormal_intp;
@@ -150,13 +150,13 @@ function assert(cond, msg) {
 	varying vec3 vertexPos_cam_intp;
 	varying vec3 vertexColor_intp;
 	varying vec2 vertexUV_intp;
-	
+
 	uniform sampler2D diffuseSampler;
 	uniform float currentTime;
 
 	void main(void) {
 		vec4 fogColor = vec4(0.1, 0.0, 0.05, 1.0);
-		
+
 		const float fogDistance = 8.0;
 		float fogDensity = clamp((length(vertexPos_cam_intp) - fogDistance) / 32.0, 0.0, 0.95);
 		vec4 texColor = texture2D(diffuseSampler, vertexUV_intp);

@@ -2,6 +2,10 @@
 // An entry for LD33 Game Jampo — You are the Monster
 // (c) 2015 by Arthur Langereis — @zenmumbler
 
+import { TriMesh, u8Color } from "./asset.js";
+import { LEVEL_SCALE, genMapMesh } from "./levelgen.js";
+import { loadObjFile } from "./objloader.js";
+
 var gl;
 
 var state = {
@@ -25,76 +29,6 @@ function intRandom(choices) {
 	return (Math.random() * choices) << 0;
 }
 
-
-function TriMesh(vertexArray, normalArray, colorArray, uvArray) {
-	assert(vertexArray && vertexArray.length && (vertexArray.length % 9 == 0), "vertex array must be a triangle soup"); // 3 vtx * 3 floats
-	assert(normalArray && (normalArray.length == vertexArray.length), "normal array must be same size as vertex array");
-	assert(colorArray && (colorArray.length == vertexArray.length), "color array must be same size as vertex array");
-	if (uvArray)
-		assert((uvArray.length / 2) == (vertexArray.length / 3), "each vertex needs a uv");
-
-	this.vertexBuffer = gl.createBuffer();
-	this.normalBuffer = gl.createBuffer();
-	this.colorBuffer = gl.createBuffer();
-	this.uvBuffer = uvArray ? gl.createBuffer() : null;
-
-	gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
-	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexArray), gl.STATIC_DRAW);
-
-	gl.bindBuffer(gl.ARRAY_BUFFER, this.normalBuffer);
-	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normalArray), gl.STATIC_DRAW);
-
-	gl.bindBuffer(gl.ARRAY_BUFFER, this.colorBuffer);
-	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colorArray), gl.STATIC_DRAW);
-
-	if (this.uvBuffer) {
-		gl.bindBuffer(gl.ARRAY_BUFFER, this.uvBuffer);
-		gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(uvArray), gl.STATIC_DRAW);
-	}
-
-	this.elements = vertexArray.length / 3;
-
-	this.draw = function(program, texture) {
-		gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
-		gl.enableVertexAttribArray(program.vertexPositionAttribute);
-		gl.vertexAttribPointer(program.vertexPositionAttribute, 3, gl.FLOAT, false, 0, 0);
-
-		gl.bindBuffer(gl.ARRAY_BUFFER, this.colorBuffer);
-		gl.enableVertexAttribArray(program.vertexColorAttribute);
-		gl.vertexAttribPointer(program.vertexColorAttribute, 3, gl.FLOAT, false, 0, 0);
-
-		if (program.vertexNormalAttribute > -1) {
-			gl.bindBuffer(gl.ARRAY_BUFFER, this.normalBuffer);
-			gl.enableVertexAttribArray(program.vertexNormalAttribute);
-			gl.vertexAttribPointer(program.vertexNormalAttribute, 3, gl.FLOAT, false, 0, 0);
-		}
-
-		if (program.vertexUVAttribute > -1) {
-			if (this.uvBuffer) {
-				gl.bindBuffer(gl.ARRAY_BUFFER, this.uvBuffer);
-				gl.enableVertexAttribArray(program.vertexUVAttribute);
-				gl.vertexAttribPointer(program.vertexUVAttribute, 2, gl.FLOAT, false, 0, 0);
-			}
-			else {
-				gl.disableVertexAttribArray(program.vertexUVAttribute);
-			}
-		}
-
-		if (texture && program.textureUniform) {
-			gl.activeTexture(gl.TEXTURE0);
-			gl.bindTexture(gl.TEXTURE_2D, texture);
-			gl.uniform1i(program.textureUniform, 0);
-		}
-
-		gl.drawArrays(gl.TRIANGLES, 0, this.elements);
-
-		if (texture && program.textureUniform) {
-			gl.bindTexture(gl.TEXTURE_2D, null);
-		}
-	};
-}
-
-
 function genColorArray(color, times) {
 	var result = [];
 	for (var n=0; n < times; ++n) {
@@ -104,13 +38,8 @@ function genColorArray(color, times) {
 }
 
 
-function u8Color(r,g,b) {
-	return [r/255, g/255, b/255];
-}
-
-
-function Model(/* mesh0, mesh1, ... */) {
-	this.meshes = [].slice.call(Model.arguments, 0);
+function Model(...args) {
+	this.meshes = [].slice.call(args, 0);
 	this.texture = null;
 
 	var scaleMat = mat4.create();
@@ -242,7 +171,7 @@ function Square(x, y) {
 		vec2.min(closest, max, closest);
 		return closest;
 	};
-	
+
 	var normals = [
 		vec2.fromValues(-1, 0), // left
 		vec2.fromValues(1, 0), // right
@@ -250,18 +179,18 @@ function Square(x, y) {
 		vec2.fromValues(0, 1), // bottom
 		vec2.fromValues(Math.sqrt(2), Math.sqrt(2)) // inner (hack)
 	];
-	
+
 	this.containsPoint = function(pt2) {
 		return vec2.equals(this.closestPoint(pt2), pt2);
 	};
-	
+
 	this.normalAtClosestPoint = function(pt2) {
 		var closest = this.closestPoint(pt2);
-		
+
 		if (vec2.equals(closest, pt2)) { // pt2 contained in box
 			return vec2.clone(normals[4]); // HACK: push out diagonally down right
 		}
-		
+
 		if (closest[0] == min[0]) {
 			return vec2.clone(normals[0]);
 		}
@@ -293,21 +222,21 @@ function Grid(width, height, cells, pathCells) {
 			++sqix;
 		}
 	}
-	
+
 	this.cells = cells;
 	this.path = pathCells;
-	
+
 	this.width = width;
 	this.height = height;
 
 	function at(x, z) {
 		return squares[(z>>0) * width + (x>>0)];
 	}
-	
+
 	function pathAt(x, z) {
 		return pathCells[(z>>0) * width + (x>>0)];
 	}
-	
+
 	this.pathExits = function(curPos, curDir) {
 		var x = curPos[0], z = curPos[1], exits = [];
 		assert(pathAt(x, z), "you're not on a path!");
@@ -323,7 +252,7 @@ function Grid(width, height, cells, pathCells) {
 
 		if ((curDir != "west") && pathAt(x+1, z))
 			exits.push({ pos: [x+1, z], dir: "east" });
-		
+
 		return exits;
 	};
 
@@ -331,18 +260,18 @@ function Grid(width, height, cells, pathCells) {
 		var sq = occupied ? new Square(x, z) : null;
 		squares[(z>>0) * width + (x>>0)] = sq;
 	};
-	
-	
+
+
 	this.castRay = function(from, direction) /* -> Square? */ {
 		// adapted from sample code at: http://lodev.org/cgtutor/raycasting.html
 		vec2.normalize(direction, direction);
 
-		//calculate ray position and direction 
+		//calculate ray position and direction
 		var rayPosX = from[0];
 		var rayPosY = from[1];
 		var rayDirX = direction[0];
 		var rayDirY = direction[1];
-		//which box of the map we're in  
+		//which box of the map we're in
 		var mapX = rayPosX << 0;
 		var mapY = rayPosY << 0;
 
@@ -389,7 +318,7 @@ function Grid(width, height, cells, pathCells) {
 
 			var sq = at(mapX, mapY);
 			if (sq) return sq;
-		} 
+		}
 
 		return null;
 	};
@@ -442,13 +371,13 @@ function Key(index) {
 	this.keyPosition = vec3.create();
 	this.lockPosition = vec3.create();
 	this.radius = 0.5;
-	
+
 	this.keyModel.setUniformScale(1);
 	this.lockModel.setUniformScale(0.02);
-	
+
 	var scaledPos = vec3.create();
 	var rotAxis = vec3.fromValues(0, 1, 0);
-	
+
 	var keyPositions = [
 		[4.5, .2, 8.5],
 		[52.5, .2, 8.5],
@@ -462,7 +391,7 @@ function Key(index) {
 		[29.3, 0.6, 26.8],
 		[27.5, 0.6, 26.8]
 	];
-	
+
 	var lockRotAxis = [0,0,1],
 		lockRotMax = Math.PI / 40;
 
@@ -480,7 +409,7 @@ function Key(index) {
 
 		var playerPos = vec2.fromValues(state.player.position[0], state.player.position[2]);
 		var myPos = vec2.fromValues(this.keyPosition[0], this.keyPosition[2]);
-		
+
 		var maxRadius = Math.max(this.radius, state.player.radius);
 		if (vec2.distance(playerPos, myPos) < maxRadius) {
 			this.found = true;
@@ -510,7 +439,7 @@ function makeDoorMesh(cornerColors) {
 	function vtx(x, y, z) { vertexes.push(x, y, z); }
 	function col(c) { colors.push(c[0], c[1], c[2]); }
 	function nrm6(nrm) { for(var n=0; n<6; ++n) normals.push(nrm[0], nrm[1], nrm[2]); }
-		
+
 
 	vtx(xb, h, za); col(cornerColors[0]); uvs.push(0,0);
 	vtx(xb, 0, za); col(cornerColors[2]); uvs.push(0,1);
@@ -531,8 +460,8 @@ function makeDoorMesh(cornerColors) {
 	vtx(xb, h, zb); col(cornerColors[4]); uvs.push(0,0);
 
 	nrm6([0,1,0]);
-	
-	return new TriMesh(vertexes, normals, colors, uvs);
+
+	return new TriMesh(gl, vertexes, normals, colors, uvs);
 }
 
 
@@ -540,18 +469,18 @@ function Door() {
 	this.mesh = makeDoorMesh(state.cornerColors);
 	this.model = new Model(this.mesh);
 	this.model.texture = state.textures["door"];
-	
+
 	this.state = "closed";
 
 	this.position = vec3.fromValues(28.5, 0, 27);
-	
+
 	this.model.setUniformScale(4);
-	
+
 	var scaledPos = vec3.create();
 	vec3.scale(scaledPos, this.position, LEVEL_SCALE);
 	this.model.setPosition(scaledPos);
 
-	// block the home base	
+	// block the home base
 	state.grid.set(27, 27, true);
 	state.grid.set(28, 27, true);
 	state.grid.set(29, 27, true);
@@ -576,7 +505,7 @@ function Door() {
 			this.position[1] = -3 * step;
 			vec3.scale(scaledPos, this.position, LEVEL_SCALE);
 			this.model.setPosition(scaledPos);
-			
+
 			if (step == 1) {
 				// unblock
 				state.grid.set(27, 27, false);
@@ -586,7 +515,7 @@ function Door() {
 			}
 		}
 	};
-	
+
 	this.draw = function() {
 		this.model.draw(state.camera, state.texturedProgram, 0);
 	};
@@ -610,13 +539,13 @@ function End() {
 
 			$1("#minutes").textContent = "" + minutes;
 			$1("#seconds").textContent = "" + seconds;
-			
+
 			hide("canvas");
 			show("#victory");
 			mode = "victory";
 		}
 	};
-	
+
 	this.draw = function() {
 	};
 }
@@ -642,7 +571,7 @@ function Player() {
 
 	var moveMat = mat2.create();
 	var movePos = vec2.create();
-	
+
 	this.die = function() {
 		if (this.dieT < 0) {
 			this.dieT = state.tCur;
@@ -654,7 +583,7 @@ function Player() {
 			var meltStep = (state.tCur - this.dieT) / 4;
 			var meltClamp = Math.max(0, Math.min(1, meltStep));
 			this.model.setScale(1 + meltClamp * 3, Math.max(0.1, Math.pow(1 - meltClamp, 2)), 1 + meltClamp * 3);
-			
+
 			if (meltStep >= 2) {
 				// back to original position
 				this.model.setUniformScale(1);
@@ -694,7 +623,7 @@ function Player() {
 				vec2.add(newPos, oldPos, movePos);
 
 				newPos = state.grid.collideAndResolveCircle(oldPos, newPos, this.radius);
-			
+
 				// warp tunnel
 				if (newPos[0] < 0)
 					newPos[0] += state.grid.width;
@@ -725,7 +654,7 @@ function Abomination(index) {
 
 	this.model.setUniformScale(5);
 	this.phase = "move";
-	
+
 	this.spawnData = [
 		{ direction: "north", pathPos: [43, 18] },
 		{ direction: "west", pathPos: [13, 4] },
@@ -733,7 +662,7 @@ function Abomination(index) {
 		{ direction: "north", pathPos: [49, 52] },
 		{ direction: "west", pathPos: [28, 36] }
 	];
-	
+
 	this.direction = this.spawnData[index].direction;
 	this.nextDir = "";
 	this.pathPos = vec2.clone(this.spawnData[index].pathPos);
@@ -742,7 +671,7 @@ function Abomination(index) {
 	this.stepDuration = 0.33;
 	this.turnDuration = 0.6;
 	this.radius = 1.4;
-	
+
 	this.rotations = {
 		north: Math.PI,
 		west: Math.PI / -2,
@@ -756,7 +685,7 @@ function Abomination(index) {
 		east: [1,0]
 	};
 	var rotAxis = vec3.fromValues(0,1,0);
-	
+
 	var scaledPos = vec3.create();
 	var moveOffset = vec3.create();
 
@@ -775,7 +704,7 @@ function Abomination(index) {
 				vec3.scale(scaledPos, scaledPos, LEVEL_SCALE);
 				this.model.setPosition(scaledPos);
 				this.model.setRotation(rotAxis, this.rotations[this.direction]);
-				
+
 				// moved 1 full tile
 				if (this.pathStep == 2) {
 					vec2.add(this.pathPos, this.pathPos, dirVec2);
@@ -783,7 +712,7 @@ function Abomination(index) {
 
 					var exits = state.grid.pathExits(this.pathPos, this.direction);
 					var exit = exits[intRandom(exits.length)];
-					
+
 					if (exit.dir != this.direction) {
 						this.nextDir = exit.dir;
 						this.phase = "turn";
@@ -794,7 +723,7 @@ function Abomination(index) {
 		else if (this.phase == "turn") {
 			var step = Math.max(0, Math.min(1, (state.tCur - this.lastStepT) / this.turnDuration));
 			step = step * step;
-		
+
 			var fromAngle = this.rotations[this.direction];
 			var toAngle = this.rotations[this.nextDir];
 			var rotation = toAngle - fromAngle;
@@ -806,7 +735,7 @@ function Abomination(index) {
 			}
 
 			this.model.setRotation(rotAxis, fromAngle + rotation * step);
-			
+
 			if (step >= 1.0) {
 				this.phase = "move";
 				this.direction = this.nextDir;
@@ -814,10 +743,10 @@ function Abomination(index) {
 				this.lastStepT = state.tCur;
 			}
 		}
-		
+
 		// -- check collisions against player
 		var playerPos = vec2.fromValues(state.player.position[0], state.player.position[2]);
-		
+
 		var maxRadius = Math.max(this.radius, state.player.radius);
 		if (vec2.distance(playerPos, this.pathPos) < maxRadius) {
 			state.player.die();
@@ -982,15 +911,15 @@ function run() {
 
 	state.player = new Player();
 	state.player.moveTo2D(28.5, 25);
-	
+
 	state.keyItems.push(new Key(0));
 	state.keyItems.push(new Key(1));
 	state.keyItems.push(new Key(2));
 	state.keyItems.push(new Key(3));
-	
+
 	state.door = new Door();
 	state.end = new End();
-	
+
 	state.pacs.push(new Abomination(0));
 	state.pacs.push(new Abomination(1));
 	state.pacs.push(new Abomination(2));
@@ -1046,7 +975,7 @@ function init() {
 			location.reload();
 		});
 
-		genMapMesh(function(mapData) {
+		genMapMesh(gl, function(mapData) {
 			state.meshes["map"] = mapData.mesh;
 			state.models["map"] = new Model(mapData.mesh);
 			state.camera.fixedPoints = mapData.cameras;
@@ -1064,23 +993,23 @@ function init() {
 
 					loadObjFile("pac1.obj", function(pac1Data) {
 						var pac1Colors = genColorArray(pacColor, pac1Data.elements);
-						state.meshes["pac1"] = new TriMesh(pac1Data.vertexes, pac1Data.normals, pac1Colors, pac1Data.uvs);
+						state.meshes["pac1"] = new TriMesh(gl, pac1Data.vertexes, pac1Data.normals, pac1Colors, pac1Data.uvs);
 
 						loadObjFile("pac2.obj", function(pac2Data) {
 							var pac2Colors = genColorArray(pacColor, pac2Data.elements);
-							state.meshes["pac2"] = new TriMesh(pac2Data.vertexes, pac2Data.normals, pac2Colors, pac2Data.uvs);
+							state.meshes["pac2"] = new TriMesh(gl, pac2Data.vertexes, pac2Data.normals, pac2Colors, pac2Data.uvs);
 
 							loadObjFile("key.obj", function(keyData) {
 								var keyColors = genColorArray(u8Color(201,163,85), keyData.elements);
-								state.meshes["key"] = new TriMesh(keyData.vertexes, keyData.normals, keyColors, null);
-								
+								state.meshes["key"] = new TriMesh(gl, keyData.vertexes, keyData.normals, keyColors, null);
+
 								loadObjFile("lock.obj", function(lockData) {
 									var lockColors = genColorArray(u8Color(0x66,0x77,0x88), lockData.elements);
-									state.meshes["lock"] = new TriMesh(lockData.vertexes, lockData.normals, lockColors, null);
+									state.meshes["lock"] = new TriMesh(gl, lockData.vertexes, lockData.normals, lockColors, null);
 
 									loadObjFile("spookje.obj", function(spookjeData) {
 										var spookjeColors = genColorArray(u8Color(255,184,221), spookjeData.elements);
-										state.meshes["spookje"] = new TriMesh(spookjeData.vertexes, spookjeData.normals, spookjeColors, null);
+										state.meshes["spookje"] = new TriMesh(gl, spookjeData.vertexes, spookjeData.normals, spookjeColors, null);
 
 										showTitle();
 									});
