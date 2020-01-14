@@ -1,74 +1,47 @@
 // Part of Pinky's Nightmare
 // (c) 2015-6 by Arthur Langereis - @zenmumbler
 
-const LEVEL_SCALE = 4.0;
+import { vec2, vec3, vec4 } from "stardazed/vector";
+import { u8Color, TriMesh } from "./asset.js";
 
-interface vec2 {
-	equals(a: sd.Float2, b: sd.Float2): boolean;
-}
+export const LEVEL_SCALE = 4.0;
 
-vec2.equals = function(a, b) {
-	return a[0] == b[0] && a[1] == b[1];
-};
+export type CameraPoint = NumArray & { doorCam: boolean };
 
-interface CameraMarker extends sd.Float2 {
-	doorCam?: boolean;
-}
-
-interface MapData {
-	cameras: CameraMarker[];
+export interface MapData {
+	cameras: CameraPoint[];
 	grid: boolean[];
 	path: boolean[];
 	gridW: number;
 	gridH: number;
-	meshData: meshdata.MeshData;
-	cornerColors: sd.Float3[];
+	mesh: TriMesh;
+	cornerColors: number[][];
 }
 
-
-function buildMapFromImageData(pix: ImageData): MapData {
-	var inuse = 0, pixw = pix.width, pixh = pix.height;
-	var data = pix.data, offset = 0, gridOffset = 0;
-	var mapMesh = new meshdata.MeshData();
+function buildMapFromImageData(gl: WebGLRenderingContext, pix: ImageData): MapData {
+	const data = pix.data, pixw = pix.width, pixh = pix.height;
+	let inuse = 0, offset = 0, gridOffset = 0;
 
 	const HEIGHT = 25.0;       // will appear inf high
-	
-	var vertexes: meshdata.VertexBufferAttributeView,
-		normals: meshdata.VertexBufferAttributeView,
-		colors: meshdata.VertexBufferAttributeView,
-		vtxIx = 0,
-		normIx = 0,
-		colIx = 0,
-		cameras: CameraMarker[] = [],
-		grid: boolean[] = [],
-		path: boolean[] = [];
 
+	const vertexes: number[] = [], normals: number[] = [], colors: number[] = [], cameras: CameraPoint[] = [], grid = [], path = [];
 
-	function vtx(x: number, y: number, z: number) {
-		vec3.set(vertexes.refItem(vtxIx), x, y, z);
-		++vtxIx;
-	}
-	function nrm6(nrm: sd.Float3) {
-		for (var n = 0; n < 6; ++n) {
-			vec3.copy(normals.refItem(normIx++), nrm);
-		}
-	}
-	function col6(colT: sd.Float3, colB: sd.Float3) {
-		vec3.copy(colors.refItem(colIx + 0), colT);
-		vec3.copy(colors.refItem(colIx + 1), colB);
-		vec3.copy(colors.refItem(colIx + 2), colB);
+	function vtx(x: number, y: number, z: number) { vertexes.push(x, y, z); }
+	function nrm6(nrm: NumArray) { for(var n=0; n<6; ++n) normals.push(nrm[0], nrm[1], nrm[2]); }
+	function col6(colT: NumArray, colB: NumArray) {
+		colors.push(colT[0], colT[1], colT[2]);
+		colors.push(colB[0], colB[1], colB[2]);
+		colors.push(colB[0], colB[1], colB[2]);
 
-		vec3.copy(colors.refItem(colIx + 3), colB);
-		vec3.copy(colors.refItem(colIx + 4), colT);
-		vec3.copy(colors.refItem(colIx + 5), colT);
-		colIx += 6;
+		colors.push(colB[0], colB[1], colB[2]);
+		colors.push(colT[0], colT[1], colT[2]);
+		colors.push(colT[0], colT[1], colT[2]);
 	}
-	
+
 	const north = [0, 0, -1],        // normals of the sides
 		west  = [-1, 0, 0],
 		south = [0, 0, 1],
 		east  = [1, 0, 0];
-	
 	const corners = [
 		[0, 0],
 		[pixw, 0],
@@ -84,46 +57,20 @@ function buildMapFromImageData(pix: ImageData): MapData {
 
 		u8Color(0xff, 0xd7, 0x00)  // homebase
 	];
-	
+
 	const topDarkenFactor = 0.65,
-		  botDarkenFactor = 0.30;    // bottom vertices are darker than top ones
-	
+		botDarkenFactor = 0.30;    // bottom vertices are darker than top ones
+
 	// home base in the grid
 	const homeBaseMin = [21,26],
-		  homeBaseMax = [35,34];
+		homeBaseMax = [35,34];
 	const doorCameraLoc = [28,23];
 
-	// preflight scan for wall cells
-	offset = 0;
-	for (var z = 0; z < pixh; ++z) {
-		for (var x = 0; x < pixw; ++x) {
-			if ((data[offset + 1] == 0) && (data[offset + 2] == 0)) {
-				++inuse;
-			}
-			offset += 4;
-		}
-	}
-
-	const vb = new meshdata.VertexBuffer(meshdata.AttrList.Pos3Norm3Colour3());
-	vb.allocate(inuse * 6 * 4);
-	mapMesh.vertexBuffers.push(vb);
-	mapMesh.primitiveGroups.push({
-		type: meshdata.PrimitiveType.Triangle,
-		fromElement: 0,
-		elementCount: inuse * 2 * 4 * 3, // 2 tris per 4 sides * 3 components
-		materialIx: 0
-	});
-	vertexes = new meshdata.VertexBufferAttributeView(vb, vb.attrByRole(meshdata.VertexAttributeRole.Position)),
-	normals = new meshdata.VertexBufferAttributeView(vb, vb.attrByRole(meshdata.VertexAttributeRole.Normal)),
-	colors = new meshdata.VertexBufferAttributeView(vb, vb.attrByRole(meshdata.VertexAttributeRole.Colour)),
-
-	// create walls and populate logic grids
-	offset = 0;
-	for (var z = 0; z < pixh; ++z) {
-		for (var x = 0; x < pixw; ++x) {
+	for (let z=0; z < pixh; ++z) {
+		for (let x=0; x < pixw; ++x) {
 			grid[gridOffset] = false;
 			path[gridOffset] = false;
-			
+
 			if ((data[offset+0] != 0 && data[offset+0] != 255) ||
 				(data[offset+1] != 0 && data[offset+1] != 255) ||
 				(data[offset+2] != 0 && data[offset+2] != 255)) {
@@ -136,25 +83,27 @@ function buildMapFromImageData(pix: ImageData): MapData {
 					za = z * LEVEL_SCALE,
 					zb = (z+1) * LEVEL_SCALE,
 					h = HEIGHT;
-				
+
 				if (data[offset+2] == 255) {
 					path[gridOffset] = true;
 				}
-				
+
 				if (data[offset+1] == 255) {
 					if (vec2.equals([x,z], doorCameraLoc)) {
-						var dc = <CameraMarker>(vec2.fromValues(x + .5, z + .1));
+						const dc: any = vec2.fromValues(x + .5, z + .1);
 						dc.doorCam = true;
 						cameras.push(dc);
 					}
 					else {
-						cameras.push(vec2.fromValues(x + .5, z + .5));
+						const dc: any = vec2.fromValues(x + .5, z + .5);
+						dc.doorCam = false;
+						cameras.push(dc);
 					}
 				}
 
 				if ((data[offset+1] == 0) && (data[offset+2] == 0)) {
 					grid[gridOffset] = true;
-					
+
 					// determine color to use
 					var topColor = vec3.create();
 					var botColor = vec3.create();
@@ -170,14 +119,14 @@ function buildMapFromImageData(pix: ImageData): MapData {
 						cornerDist[1] = vec2.squaredDistance(corners[1], [x, z]);
 						cornerDist[2] = vec2.squaredDistance(corners[2], [x, z]);
 						cornerDist[3] = vec2.squaredDistance(corners[3], [x, z]);
-					
+
 						vec4.normalize(cornerDist, cornerDist);
-					
+
 						cornerDist[0] = Math.pow(.5 + (.5 * Math.cos(Math.PI * cornerDist[0])), 2);
 						cornerDist[1] = Math.pow(.5 + (.5 * Math.cos(Math.PI * cornerDist[1])), 2);
 						cornerDist[2] = Math.pow(.5 + (.5 * Math.cos(Math.PI * cornerDist[2])), 2);
 						cornerDist[3] = Math.pow(.5 + (.5 * Math.cos(Math.PI * cornerDist[3])), 2);
-					
+
 						vec3.scaleAndAdd(topColor, topColor, cornerColors[0], cornerDist[0]); // may exceed 1 for factors, but will be clamped by gpu
 						vec3.scaleAndAdd(topColor, topColor, cornerColors[1], cornerDist[1]);
 						vec3.scaleAndAdd(topColor, topColor, cornerColors[2], cornerDist[2]);
@@ -186,7 +135,7 @@ function buildMapFromImageData(pix: ImageData): MapData {
 						vec3.scale(botColor, topColor, botDarkenFactor);
 						vec3.scale(topColor, topColor, topDarkenFactor);
 					}
-				
+
 					// ccw
 					// wall top
 					vtx(xb, h, za);
@@ -196,7 +145,7 @@ function buildMapFromImageData(pix: ImageData): MapData {
 					vtx(xa, 0, za);
 					vtx(xa, h, za);
 					vtx(xb, h, za);
-				
+
 					nrm6(north);
 					col6(topColor, botColor);
 
@@ -211,7 +160,7 @@ function buildMapFromImageData(pix: ImageData): MapData {
 
 					nrm6(west);
 					col6(topColor, botColor);
-				
+
 					// wall bottom
 					vtx(xa, h, zb);
 					vtx(xa, 0, zb);
@@ -228,7 +177,7 @@ function buildMapFromImageData(pix: ImageData): MapData {
 					vtx(xb, h, zb);
 					vtx(xb, 0, zb);
 					vtx(xb, 0, za);
-				
+
 					vtx(xb, 0, za);
 					vtx(xb, h, za);
 					vtx(xb, h, zb);
@@ -247,17 +196,39 @@ function buildMapFromImageData(pix: ImageData): MapData {
 	console.info("vtx", vertexes.count, "cams", cameras.length);
 
 	return {
-		cameras: cameras,
-		grid: grid,
-		path: path,
+		cameras,
+		grid,
+		path,
 		gridW: pixw,
 		gridH: pixh,
-		meshData: mapMesh,
-		cornerColors: cornerColors
+		mesh: new TriMesh(gl, vertexes, normals, colors),
+		cornerColors
 	};
 }
 
 
-function genMapMesh() {	
-	return asset.loadImageData("data/levelx_.png").then(buildMapFromImageData);
+export function genMapMesh(gl: WebGLRenderingContext, then: (md: MapData) => void) {
+	const img = new Image();
+	img.src = "assets/levelx_.png";
+	img.onload = function() {
+		const t0 = performance.now();
+		const cvs = document.createElement("canvas");
+		cvs.width = img.width;
+		cvs.height = img.height;
+
+		var ctx = cvs.getContext("2d")!;
+		(ctx as any).webkitImageSmoothingEnabled = false; // NO
+		(ctx as any).mozImageSmoothingEnabled = false;
+		(ctx as any).msImageSmoothingEnabled = false;
+		ctx.imageSmoothingEnabled = false;
+
+		ctx.drawImage(img, 0, 0);
+		const pix = ctx.getImageData(0, 0, cvs.width, cvs.height);
+		const map = buildMapFromImageData(gl, pix);
+		const t1 = performance.now();
+
+		console.info("mapGen took", (t1-t0), "ms");
+
+		then(map);
+	};
 }
