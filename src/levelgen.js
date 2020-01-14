@@ -200,7 +200,7 @@ function buildMapFromImageData(gl, pix) {
 
 export function genMapMesh(gl, then) {
 	var img = new Image();
-	img.src = "levelx_.png";
+	img.src = "assets/levelx_.png";
 	img.onload = function() {
 		var t0 = performance.now();
 		var cvs = document.createElement("canvas");
