@@ -823,7 +823,7 @@ function drawScene(camera: Camera) {
 		gl.uniform1f(state.modelProgram.timeUniform, state.tCur);
 	}
 
-	state.models["map"].draw(camera, state.modelProgram, 0);
+	state.models.map.draw(camera, state.modelProgram, 0);
 	state.player.draw();
 	state.keyItems.forEach(function(key) { key.draw(); });
 

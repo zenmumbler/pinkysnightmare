@@ -1,4 +1,6 @@
+import { VertexBuffer, VertexAttributeRole } from "stardazed/geometry";
 import { assert } from "./util";
+import { Float } from "stardazed/core";
 
 export function u8Color(r: number, g: number, b: number) {
 	return [r / 255, g / 255, b / 255];
@@ -48,7 +50,7 @@ function getShader(gl: WebGLRenderingContext, id: string) {
 export type StandardProgram = WebGLProgram & {
 	vertexPositionAttribute: number;
 	vertexColorAttribute: number;
-	vertexNormalAttribute: number;
+	// vertexNormalAttribute: number;
 	vertexUVAttribute: number;
 
 	projMatrixUniform: WebGLUniformLocation | null;
@@ -72,26 +74,26 @@ export function createStandardProgram(gl: WebGLRenderingContext, vertID: string,
 
 	program.vertexPositionAttribute = gl.getAttribLocation(program, "vertexPos_model");
 	program.vertexColorAttribute = gl.getAttribLocation(program, "vertexColor");
-	program.vertexNormalAttribute = gl.getAttribLocation(program, "vertexNormal");
+	// program.vertexNormalAttribute = gl.getAttribLocation(program, "vertexNormal");
 	program.vertexUVAttribute = gl.getAttribLocation(program, "vertexUV");
 
 	program.projMatrixUniform = gl.getUniformLocation(program, "projectionMatrix");
 	program.mvMatrixUniform = gl.getUniformLocation(program, "modelViewMatrix");
-	program.normalMatrixUniform = gl.getUniformLocation(program, "normalMatrix");
+	// program.normalMatrixUniform = gl.getUniformLocation(program, "normalMatrix");
 	program.textureUniform = gl.getUniformLocation(program, "diffuseSampler");
 	program.timeUniform = gl.getUniformLocation(program, "currentTime");
 
 	gl.useProgram(null);
+
+	console.info(program, program);
 
 	return program;
 }
 
 
 export class TriMesh {
-	vertexBuffer: WebGLBuffer;
-	normalBuffer: WebGLBuffer;
-	colorBuffer: WebGLBuffer;
-	uvBuffer: WebGLBuffer | null;
+	vertexBuffer: VertexBuffer;
+	gBuffer: WebGLBuffer;
 	elements: number;
 
 	constructor(gl: WebGLRenderingContext, vertexArray: number[], normalArray: number[], colorArray: number[], uvArray ?: number[]) {
@@ -102,48 +104,66 @@ export class TriMesh {
 			assert((uvArray.length / 2) === (vertexArray.length / 3), "each vertex needs a uv");
 		}
 
-		this.vertexBuffer = gl.createBuffer()!;
-		this.normalBuffer = gl.createBuffer()!;
-		this.colorBuffer = gl.createBuffer()!;
-		this.uvBuffer = uvArray ? gl.createBuffer() : null;
+		this.elements = vertexArray.length / 3;
 
-		gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
-		gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexArray), gl.STATIC_DRAW);
-
-		gl.bindBuffer(gl.ARRAY_BUFFER, this.normalBuffer);
-		gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normalArray), gl.STATIC_DRAW);
-
-		gl.bindBuffer(gl.ARRAY_BUFFER, this.colorBuffer);
-		gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colorArray), gl.STATIC_DRAW);
-
-		if (this.uvBuffer) {
-			gl.bindBuffer(gl.ARRAY_BUFFER, this.uvBuffer);
-			gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(uvArray!), gl.STATIC_DRAW);
+		const vb = this.vertexBuffer = new VertexBuffer({
+			attrs: [
+				{ type: Float, width: 3, role: VertexAttributeRole.Position },
+				// { type: Float, width: 3, role: VertexAttributeRole.Normal },
+				{ type: Float, width: 3, role: VertexAttributeRole.Colour },
+			].concat(uvArray ? { type: Float, width: 2, role: VertexAttributeRole.UV } : []),
+			valueCount: this.elements
+		});
+		vb.fieldView(0).copyValuesFrom(vertexArray, this.elements);
+		// vb.fieldView(1).copyValuesFrom(normalArray, this.elements);
+		vb.fieldView(1).copyValuesFrom(colorArray, this.elements);
+		if (uvArray) {
+			vb.fieldView(2).copyValuesFrom(uvArray, this.elements);
 		}
 
-		this.elements = vertexArray.length / 3;
+		const [fP, fC, fT] = this.vertexBuffer.fields;
+		console.info("FIELDS", fP, fC, fT, new Float32Array(vb.data.buffer));
+
+		this.gBuffer = gl.createBuffer()!;
+
+		gl.bindBuffer(gl.ARRAY_BUFFER, this.gBuffer);
+		gl.bufferData(gl.ARRAY_BUFFER, vb.data, gl.STATIC_DRAW);
+
+		// gl.bindBuffer(gl.ARRAY_BUFFER, this.normalBuffer);
+		// gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normalArray), gl.STATIC_DRAW);
+
+		// gl.bindBuffer(gl.ARRAY_BUFFER, this.colorBuffer);
+		// gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colorArray), gl.STATIC_DRAW);
+
+		// if (this.uvBuffer) {
+		// 	gl.bindBuffer(gl.ARRAY_BUFFER, this.uvBuffer);
+		// 	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(uvArray!), gl.STATIC_DRAW);
+		// }
 	}
 
 	draw(gl: WebGLRenderingContext, program: StandardProgram, texture: WebGLTexture | undefined) {
-		gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+		const [fP, fC, fT] = this.vertexBuffer.fields;
+		const stride = this.vertexBuffer.stride;
+
+		gl.bindBuffer(gl.ARRAY_BUFFER, this.gBuffer);
 		gl.enableVertexAttribArray(program.vertexPositionAttribute);
-		gl.vertexAttribPointer(program.vertexPositionAttribute, 3, gl.FLOAT, false, 0, 0);
+		gl.vertexAttribPointer(program.vertexPositionAttribute, 3, gl.FLOAT, false, stride, fP.byteOffset);
 
-		gl.bindBuffer(gl.ARRAY_BUFFER, this.colorBuffer);
+		// gl.bindBuffer(gl.ARRAY_BUFFER, this.colorBuffer);
 		gl.enableVertexAttribArray(program.vertexColorAttribute);
-		gl.vertexAttribPointer(program.vertexColorAttribute, 3, gl.FLOAT, false, 0, 0);
+		gl.vertexAttribPointer(program.vertexColorAttribute, 3, gl.FLOAT, false, stride, fC.byteOffset);
 
-		if (program.vertexNormalAttribute > -1) {
-			gl.bindBuffer(gl.ARRAY_BUFFER, this.normalBuffer);
-			gl.enableVertexAttribArray(program.vertexNormalAttribute);
-			gl.vertexAttribPointer(program.vertexNormalAttribute, 3, gl.FLOAT, false, 0, 0);
-		}
+		// if (program.vertexNormalAttribute > -1) {
+			// gl.bindBuffer(gl.ARRAY_BUFFER, this.normalBuffer);
+			// gl.enableVertexAttribArray(program.vertexNormalAttribute);
+			// gl.vertexAttribPointer(program.vertexNormalAttribute, 3, gl.FLOAT, false, stride, fN.byteOffset);
+		// }
 
 		if (program.vertexUVAttribute > -1) {
-			if (this.uvBuffer) {
-				gl.bindBuffer(gl.ARRAY_BUFFER, this.uvBuffer);
+			if (fT) {
+				// gl.bindBuffer(gl.ARRAY_BUFFER, this.uvBuffer);
 				gl.enableVertexAttribArray(program.vertexUVAttribute);
-				gl.vertexAttribPointer(program.vertexUVAttribute, 2, gl.FLOAT, false, 0, 0);
+				gl.vertexAttribPointer(program.vertexUVAttribute, 2, gl.FLOAT, false, stride, fT.byteOffset);
 			}
 			else {
 				gl.disableVertexAttribArray(program.vertexUVAttribute);

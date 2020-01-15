@@ -62,21 +62,21 @@
 <script id="standardVert" type="x-shader/x-vertex">
 	attribute vec3 vertexPos_model;
 	attribute vec3 vertexColor;
-	attribute vec3 vertexNormal;
+	// attribute vec3 vertexNormal;
 
 	uniform mat4 modelViewMatrix;
 	uniform mat4 projectionMatrix;
-	uniform mat3 normalMatrix;
+	// uniform mat3 normalMatrix;
 
 	varying vec3 vertexPos_cam_intp;
 	varying vec3 vertexColor_intp;
-	varying vec3 vertexNormal_intp;
+	// varying vec3 vertexNormal_intp;
 
 	void main(void) {
 		gl_Position = projectionMatrix * modelViewMatrix * vec4(vertexPos_model, 1.0);
 		vertexPos_cam_intp = (modelViewMatrix * vec4(vertexPos_model, 1.0)).xyz;
 		vertexColor_intp = vertexColor;
-		vertexNormal_intp = normalize(normalMatrix * vertexNormal);
+		// vertexNormal_intp = normalize(normalMatrix * vertexNormal);
 	}
 </script>
 
@@ -103,23 +103,23 @@
 <script id="texturedVert" type="x-shader/x-vertex">
 	attribute vec3 vertexPos_model;
 	attribute vec3 vertexColor;
-	attribute vec3 vertexNormal;
+	// attribute vec3 vertexNormal;
 	attribute vec2 vertexUV;
 
 	uniform mat4 modelViewMatrix;
 	uniform mat4 projectionMatrix;
-	uniform mat3 normalMatrix;
+	// uniform mat3 normalMatrix;
 
 	varying vec3 vertexPos_cam_intp;
 	varying vec3 vertexColor_intp;
-	varying vec3 vertexNormal_intp;
+	// varying vec3 vertexNormal_intp;
 	varying vec2 vertexUV_intp;
 
 	void main(void) {
 		gl_Position = projectionMatrix * modelViewMatrix * vec4(vertexPos_model, 1.0);
 		vertexPos_cam_intp = (modelViewMatrix * vec4(vertexPos_model, 1.0)).xyz;
 		vertexColor_intp = vertexColor;
-		vertexNormal_intp = normalize(normalMatrix * vertexNormal);
+		// vertexNormal_intp = normalize(normalMatrix * vertexNormal);
 		vertexUV_intp = vertexUV;
 	}
 </script>
@@ -140,9 +140,9 @@
 		const float fogDistance = 8.0;
 		float fogDensity = clamp((length(vertexPos_cam_intp) - fogDistance) / 32.0, 0.0, 0.95);
 		vec4 texColor = texture2D(diffuseSampler, vertexUV_intp);
-//		vec4 outColor = mix(vec4(vertexColor_intp, 1.0), texColor, 0.1);
+		// vec4 outColor = mix(vec4(vertexColor_intp, 1.0), texColor, 0.1);
 		vec4 outColor = min(vec4(vertexColor_intp, 1.0), texColor);
-//		vec4 outColor = texColor;
+		// vec4 outColor = texColor;
 
 		gl_FragColor = mix(outColor, fogColor, fogDensity);
 	}
