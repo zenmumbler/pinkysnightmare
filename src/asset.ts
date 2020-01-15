@@ -95,6 +95,7 @@ export class TriMesh {
 	vertexBuffer: VertexBuffer;
 	gBuffer: WebGLBuffer;
 	elements: number;
+	vaos: Map<WebGLProgram, WebGLVertexArrayObject>;
 
 	constructor(gl: WebGLRenderingContext, vertexArray: number[], normalArray: number[], colorArray: number[], uvArray ?: number[]) {
 		assert(vertexArray.length % 9 === 0, "vertex array must be a triangle soup"); // 3 vtx * 3 floats
@@ -121,53 +122,46 @@ export class TriMesh {
 			vb.fieldView(2).copyValuesFrom(uvArray, this.elements);
 		}
 
-		const [fP, fC, fT] = this.vertexBuffer.fields;
-		console.info("FIELDS", fP, fC, fT, new Float32Array(vb.data.buffer));
-
 		this.gBuffer = gl.createBuffer()!;
-
 		gl.bindBuffer(gl.ARRAY_BUFFER, this.gBuffer);
 		gl.bufferData(gl.ARRAY_BUFFER, vb.data, gl.STATIC_DRAW);
 
-		// gl.bindBuffer(gl.ARRAY_BUFFER, this.normalBuffer);
-		// gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normalArray), gl.STATIC_DRAW);
-
-		// gl.bindBuffer(gl.ARRAY_BUFFER, this.colorBuffer);
-		// gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colorArray), gl.STATIC_DRAW);
-
-		// if (this.uvBuffer) {
-		// 	gl.bindBuffer(gl.ARRAY_BUFFER, this.uvBuffer);
-		// 	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(uvArray!), gl.STATIC_DRAW);
-		// }
+		const extVAO = gl.getExtension("OES_vertex_array_object");
+		assert(extVAO, "get with the program!");
+		this.vaos = new Map();
 	}
 
 	draw(gl: WebGLRenderingContext, program: StandardProgram, texture: WebGLTexture | undefined) {
-		const [fP, fC, fT] = this.vertexBuffer.fields;
-		const stride = this.vertexBuffer.stride;
+		const extVAO = gl.getExtension("OES_vertex_array_object")!;
+		let vao = this.vaos.get(program);
 
-		gl.bindBuffer(gl.ARRAY_BUFFER, this.gBuffer);
-		gl.enableVertexAttribArray(program.vertexPositionAttribute);
-		gl.vertexAttribPointer(program.vertexPositionAttribute, 3, gl.FLOAT, false, stride, fP.byteOffset);
+		if (! vao) {
+			vao = extVAO.createVertexArrayOES()!;
+			extVAO.bindVertexArrayOES(vao);
 
-		// gl.bindBuffer(gl.ARRAY_BUFFER, this.colorBuffer);
-		gl.enableVertexAttribArray(program.vertexColorAttribute);
-		gl.vertexAttribPointer(program.vertexColorAttribute, 3, gl.FLOAT, false, stride, fC.byteOffset);
+			const [fP, fC, fT] = this.vertexBuffer.fields;
+			const stride = this.vertexBuffer.stride;
 
-		// if (program.vertexNormalAttribute > -1) {
-			// gl.bindBuffer(gl.ARRAY_BUFFER, this.normalBuffer);
-			// gl.enableVertexAttribArray(program.vertexNormalAttribute);
-			// gl.vertexAttribPointer(program.vertexNormalAttribute, 3, gl.FLOAT, false, stride, fN.byteOffset);
-		// }
+			gl.bindBuffer(gl.ARRAY_BUFFER, this.gBuffer);
+			gl.enableVertexAttribArray(program.vertexPositionAttribute);
+			gl.vertexAttribPointer(program.vertexPositionAttribute, 3, gl.FLOAT, false, stride, fP.byteOffset);
 
-		if (program.vertexUVAttribute > -1) {
-			if (fT) {
-				// gl.bindBuffer(gl.ARRAY_BUFFER, this.uvBuffer);
-				gl.enableVertexAttribArray(program.vertexUVAttribute);
-				gl.vertexAttribPointer(program.vertexUVAttribute, 2, gl.FLOAT, false, stride, fT.byteOffset);
+			gl.enableVertexAttribArray(program.vertexColorAttribute);
+			gl.vertexAttribPointer(program.vertexColorAttribute, 3, gl.FLOAT, false, stride, fC.byteOffset);
+
+			if (program.vertexUVAttribute > -1) {
+				if (fT) {
+					gl.enableVertexAttribArray(program.vertexUVAttribute);
+					gl.vertexAttribPointer(program.vertexUVAttribute, 2, gl.FLOAT, false, stride, fT.byteOffset);
+				}
+				else {
+					gl.disableVertexAttribArray(program.vertexUVAttribute);
+				}
 			}
-			else {
-				gl.disableVertexAttribArray(program.vertexUVAttribute);
-			}
+			this.vaos.set(program, vao);
+		}
+		else {
+			extVAO.bindVertexArrayOES(vao);
 		}
 
 		if (texture && program.textureUniform) {
