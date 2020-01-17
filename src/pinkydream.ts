@@ -4,7 +4,7 @@
 
 import { vec2, vec3, mat2, mat3, mat4 } from "stardazed/vector";
 import { $1, on, show, hide, assert } from "./util.js";
-import { createStandardProgram, createStandardTexture, TriMesh, u8Color, StandardProgram } from "./asset.js";
+import { createStandardProgram, createStandardTexture, TriMesh, u8Color, StandardProgram, quickGeometry } from "./asset.js";
 import { LEVEL_SCALE, genMapMesh, CameraPoint } from "./levelgen.js";
 import { loadObjFile } from "./objloader.js";
 
@@ -45,15 +45,6 @@ const KEY_UP = 38, KEY_DOWN = 40, KEY_LEFT = 37, KEY_RIGHT = 39,
 function intRandom(choices: number) {
 	return (Math.random() * choices) | 0;
 }
-
-function genColorArray(color: number[], times: number) {
-	const result = [];
-	for (let n = 0; n < times; ++n) {
-		result.push(color[0], color[1], color[2]);
-	}
-	return result;
-}
-
 
 class Model {
 	meshes: TriMesh[];
@@ -510,7 +501,7 @@ function makeDoorMesh(cornerColors: number[][]) {
 
 	nrm6([0, 1, 0]);
 
-	return new TriMesh(gl, vertexes, normals, colors, uvs);
+	return new TriMesh(gl, quickGeometry(vertexes, normals, colors, uvs));
 }
 
 
@@ -965,7 +956,7 @@ function init() {
 			location.reload();
 		});
 
-		genMapMesh(gl, function(mapData) {
+		genMapMesh(gl, async function(mapData) {
 			state.meshes["map"] = mapData.mesh;
 			state.models["map"] = new Model([mapData.mesh]);
 			state.camera.fixedPoints = mapData.cameras;
@@ -974,42 +965,25 @@ function init() {
 
 			const pacColor = u8Color(213, 215, 17);
 
-			// Promises are for wimps
-			createStandardTexture(gl, "assets/doortex.png", function(doorTex) {
-				state.textures["door"] = doorTex;
+			state.textures["door"] = await createStandardTexture(gl, "assets/doortex.png");
+			state.textures["crackpac"] = await createStandardTexture(gl, "assets/crackpac.png");
 
-				createStandardTexture(gl, "assets/crackpac.png", function(pacTex) {
-					state.textures["crackpac"] = pacTex;
+			const pac1Geom = await loadObjFile("assets/pac1.obj", pacColor);
+			state.meshes["pac1"] = new TriMesh(gl, pac1Geom);
 
-					loadObjFile("assets/pac1.obj", function(pac1Data) {
-						const pac1Colors = genColorArray(pacColor, pac1Data.elements);
-						state.meshes["pac1"] = new TriMesh(gl, pac1Data.vertexes, pac1Data.normals, pac1Colors, pac1Data.uvs);
+			const pac2Geom = await loadObjFile("assets/pac2.obj", pacColor);
+			state.meshes["pac2"] = new TriMesh(gl, pac2Geom);
 
-						loadObjFile("assets/pac2.obj", function(pac2Data) {
-							const pac2Colors = genColorArray(pacColor, pac2Data.elements);
-							state.meshes["pac2"] = new TriMesh(gl, pac2Data.vertexes, pac2Data.normals, pac2Colors, pac2Data.uvs);
+			const keyGeom = await loadObjFile("assets/key.obj", u8Color(201, 163, 85));
+			state.meshes["key"] = new TriMesh(gl, keyGeom);
 
-							loadObjFile("assets/key.obj", function(keyData) {
-								const keyColors = genColorArray(u8Color(201, 163, 85), keyData.elements);
-								state.meshes["key"] = new TriMesh(gl, keyData.vertexes, keyData.normals, keyColors);
+			const lockGeom = await loadObjFile("assets/lock.obj", u8Color(0x66, 0x77, 0x88));
+			state.meshes["lock"] = new TriMesh(gl, lockGeom);
 
-								loadObjFile("assets/lock.obj", function(lockData) {
-									const lockColors = genColorArray(u8Color(0x66, 0x77, 0x88), lockData.elements);
-									state.meshes["lock"] = new TriMesh(gl, lockData.vertexes, lockData.normals, lockColors);
+			const spookjeGeom = await loadObjFile("assets/spookje.obj", u8Color(255, 184, 221));
+			state.meshes["spookje"] = new TriMesh(gl, spookjeGeom);
 
-									loadObjFile("assets/spookje.obj", function(spookjeData) {
-										const spookjeColors = genColorArray(u8Color(255, 184, 221), spookjeData.elements);
-										state.meshes["spookje"] = new TriMesh(gl, spookjeData.vertexes, spookjeData.normals, spookjeColors);
-
-										showTitle();
-									});
-								});
-							});
-						});
-					});
-				});
-			});
-
+			showTitle();
 		}); // map
 	});
 }

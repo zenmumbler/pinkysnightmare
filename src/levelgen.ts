@@ -2,7 +2,7 @@
 // (c) 2015-6 by Arthur Langereis - @zenmumbler
 
 import { vec2, vec3, vec4 } from "stardazed/vector";
-import { u8Color, TriMesh } from "./asset.js";
+import { u8Color, TriMesh, quickGeometry } from "./asset.js";
 
 export const LEVEL_SCALE = 4.0;
 
@@ -24,18 +24,18 @@ function buildMapFromImageData(gl: WebGLRenderingContext, pix: ImageData): MapDa
 
 	const HEIGHT = 25.0;       // will appear inf high
 
-	const vertexes: number[] = [], normals: number[] = [], colors: number[] = [], cameras: CameraPoint[] = [], grid = [], path = [];
+	const vertexes: number[] = [], normals: number[] = [], colours: number[] = [], cameras: CameraPoint[] = [], grid = [], path = [];
 
 	function vtx(x: number, y: number, z: number) { vertexes.push(x, y, z); }
 	function nrm6(nrm: NumArray) { for (let n = 0; n < 6; ++n) { normals.push(nrm[0], nrm[1], nrm[2]); } }
 	function col6(colT: NumArray, colB: NumArray) {
-		colors.push(colT[0], colT[1], colT[2]);
-		colors.push(colB[0], colB[1], colB[2]);
-		colors.push(colB[0], colB[1], colB[2]);
+		colours.push(colT[0], colT[1], colT[2]);
+		colours.push(colB[0], colB[1], colB[2]);
+		colours.push(colB[0], colB[1], colB[2]);
 
-		colors.push(colB[0], colB[1], colB[2]);
-		colors.push(colT[0], colT[1], colT[2]);
-		colors.push(colT[0], colT[1], colT[2]);
+		colours.push(colB[0], colB[1], colB[2]);
+		colours.push(colT[0], colT[1], colT[2]);
+		colours.push(colT[0], colT[1], colT[2]);
 	}
 
 	const north = [0, 0, -1],        // normals of the sides
@@ -196,13 +196,15 @@ function buildMapFromImageData(gl: WebGLRenderingContext, pix: ImageData): MapDa
 	console.info("map inuse", inuse);
 	console.info("vtx", vertexes.length, "cams", cameras.length);
 
+	const geom = quickGeometry(vertexes, normals, colours);
+
 	return {
 		cameras,
 		grid,
 		path,
 		gridW: pixw,
 		gridH: pixh,
-		mesh: new TriMesh(gl, vertexes, normals, colors),
+		mesh: new TriMesh(gl, geom),
 		cornerColors
 	};
 }

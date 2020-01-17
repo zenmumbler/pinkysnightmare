@@ -1,26 +1,28 @@
-import { VertexBuffer, VertexAttributeRole } from "stardazed/geometry";
+import { VertexAttributeRole, Geometry, allocateGeometry } from "stardazed/geometry";
 import { assert } from "./util";
-import { Float } from "stardazed/core";
+import { Float, UInt8 } from "stardazed/core";
 
 export function u8Color(r: number, g: number, b: number) {
 	return [r / 255, g / 255, b / 255];
 }
 
-export function createStandardTexture(gl: WebGLRenderingContext, fileName: string, then: (t: WebGLTexture) => void) {
-	const texture = gl.createTexture()!;
-	const image = new Image();
-	image.onload = function() {
-		gl.bindTexture(gl.TEXTURE_2D, texture);
-		// gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-		gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
-		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-		gl.bindTexture(gl.TEXTURE_2D, null);
+export function createStandardTexture(gl: WebGLRenderingContext, fileName: string) {
+	return new Promise<WebGLTexture>(resolve => {
+		const texture = gl.createTexture()!;
+		const image = new Image();
+		image.onload = function() {
+			gl.bindTexture(gl.TEXTURE_2D, texture);
+			// gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+			gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+			gl.bindTexture(gl.TEXTURE_2D, null);
 
-		then(texture);
-	};
+			resolve(texture);
+		};
 
-	image.src = fileName;
+		image.src = fileName;
+	})
 }
 
 function getShader(gl: WebGLRenderingContext, id: string) {
@@ -90,41 +92,55 @@ export function createStandardProgram(gl: WebGLRenderingContext, vertID: string,
 	return program;
 }
 
+export function quickGeometry(positions: NumArray, normals: NumArray, colours: NumArray, uvs?: NumArray) {
+	const vertexCount = (positions.length / 3) | 0;
+	const geom = allocateGeometry({
+		vertexDescs: [
+			{
+				attrs: [
+					{ type: Float, width: 3, role: VertexAttributeRole.Position },
+					{ type: Float, width: 3, role: VertexAttributeRole.Normal },
+					{ type: Float, width: 3, role: VertexAttributeRole.Colour }
+				].concat(
+					uvs ? [
+						{ type: Float, width: 2, role: VertexAttributeRole.UV }
+					] : []
+				),
+				valueCount: vertexCount
+			}
+		],
+		indexCount: 0
+	});
+	const vb = geom.vertexBuffers[0];
+	vb.fieldView(0).copyValuesFrom(positions, vertexCount);
+	vb.fieldView(1).copyValuesFrom(normals, vertexCount);
+	vb.fieldView(2).copyValuesFrom(colours, vertexCount);
+	if (uvs) vb.fieldView(3).copyValuesFrom(uvs, vertexCount);
+	return geom;
+}
 
 export class TriMesh {
-	vertexBuffer: VertexBuffer;
-	gBuffer: WebGLBuffer;
-	elements: number;
+	geometry: Geometry;
+	gvBuffer: WebGLBuffer;
+	giBuffer: WebGLBuffer | undefined;
+	indexType = 0;
 	vaos: Map<WebGLProgram, WebGLVertexArrayObject>;
 
-	constructor(gl: WebGLRenderingContext, vertexArray: number[], normalArray: number[], colorArray: number[], uvArray ?: number[]) {
-		assert(vertexArray.length % 9 === 0, "vertex array must be a triangle soup"); // 3 vtx * 3 floats
-		assert(normalArray.length === vertexArray.length, "normal array must be same size as vertex array");
-		assert(colorArray.length === vertexArray.length, "color array must be same size as vertex array");
-		if (uvArray) {
-			assert((uvArray.length / 2) === (vertexArray.length / 3), "each vertex needs a uv");
+	constructor(gl: WebGLRenderingContext, geom: Geometry) {
+		this.geometry = geom;
+
+		this.gvBuffer = gl.createBuffer()!;
+		gl.bindBuffer(gl.ARRAY_BUFFER, this.gvBuffer);
+		gl.bufferData(gl.ARRAY_BUFFER, geom.vertexBuffers[0].data, gl.STATIC_DRAW);
+
+		if (geom.indexBuffer) {
+			this.giBuffer = gl.createBuffer()!;
+			gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.giBuffer);
+			gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, geom.indexBuffer.data, gl.STATIC_DRAW);
+
+			if (geom.indexBuffer.elementType === UInt8) this.indexType = gl.UNSIGNED_BYTE;
+			else this.indexType = gl.UNSIGNED_SHORT;
 		}
-
-		this.elements = vertexArray.length / 3;
-
-		const vb = this.vertexBuffer = new VertexBuffer({
-			attrs: [
-				{ type: Float, width: 3, role: VertexAttributeRole.Position },
-				// { type: Float, width: 3, role: VertexAttributeRole.Normal },
-				{ type: Float, width: 3, role: VertexAttributeRole.Colour },
-			].concat(uvArray ? { type: Float, width: 2, role: VertexAttributeRole.UV } : []),
-			valueCount: this.elements
-		});
-		vb.fieldView(0).copyValuesFrom(vertexArray, this.elements);
-		// vb.fieldView(1).copyValuesFrom(normalArray, this.elements);
-		vb.fieldView(1).copyValuesFrom(colorArray, this.elements);
-		if (uvArray) {
-			vb.fieldView(2).copyValuesFrom(uvArray, this.elements);
-		}
-
-		this.gBuffer = gl.createBuffer()!;
-		gl.bindBuffer(gl.ARRAY_BUFFER, this.gBuffer);
-		gl.bufferData(gl.ARRAY_BUFFER, vb.data, gl.STATIC_DRAW);
 
 		const extVAO = gl.getExtension("OES_vertex_array_object");
 		assert(extVAO, "get with the program!");
@@ -139,24 +155,30 @@ export class TriMesh {
 			vao = extVAO.createVertexArrayOES()!;
 			extVAO.bindVertexArrayOES(vao);
 
-			const [fP, fC, fT] = this.vertexBuffer.fields;
-			const stride = this.vertexBuffer.stride;
+			const vertexBuffer = this.geometry.vertexBuffers[0];
+			const stride = vertexBuffer.stride;
+			const fPos = vertexBuffer.fieldByRole(VertexAttributeRole.Position)!;
+			const fCol = vertexBuffer.fieldByRole(VertexAttributeRole.Colour)!;
+			const fTex = vertexBuffer.fieldByRole(VertexAttributeRole.UV);
 
-			gl.bindBuffer(gl.ARRAY_BUFFER, this.gBuffer);
+			gl.bindBuffer(gl.ARRAY_BUFFER, this.gvBuffer);
 			gl.enableVertexAttribArray(program.vertexPositionAttribute);
-			gl.vertexAttribPointer(program.vertexPositionAttribute, 3, gl.FLOAT, false, stride, fP.byteOffset);
+			gl.vertexAttribPointer(program.vertexPositionAttribute, 3, gl.FLOAT, false, stride, fPos.byteOffset);
 
 			gl.enableVertexAttribArray(program.vertexColorAttribute);
-			gl.vertexAttribPointer(program.vertexColorAttribute, 3, gl.FLOAT, false, stride, fC.byteOffset);
+			gl.vertexAttribPointer(program.vertexColorAttribute, 3, gl.FLOAT, false, stride, fCol.byteOffset);
 
 			if (program.vertexUVAttribute > -1) {
-				if (fT) {
+				if (fTex) {
 					gl.enableVertexAttribArray(program.vertexUVAttribute);
-					gl.vertexAttribPointer(program.vertexUVAttribute, 2, gl.FLOAT, false, stride, fT.byteOffset);
+					gl.vertexAttribPointer(program.vertexUVAttribute, 2, gl.FLOAT, false, stride, fTex.byteOffset);
 				}
 				else {
 					gl.disableVertexAttribArray(program.vertexUVAttribute);
 				}
+			}
+			if (this.giBuffer) {
+				gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.giBuffer);
 			}
 			this.vaos.set(program, vao);
 		}
@@ -169,11 +191,17 @@ export class TriMesh {
 			gl.bindTexture(gl.TEXTURE_2D, texture);
 			gl.uniform1i(program.textureUniform, 0);
 		}
-
-		gl.drawArrays(gl.TRIANGLES, 0, this.elements);
+		if (this.giBuffer) {
+			gl.drawElements(gl.TRIANGLES, this.geometry.indexBuffer!.count, this.indexType, 0);
+		}
+		else {
+			gl.drawArrays(gl.TRIANGLES, 0, this.geometry.vertexBuffers[0].capacity);
+		}
 
 		if (texture && program.textureUniform) {
 			gl.bindTexture(gl.TEXTURE_2D, null);
 		}
+
+		extVAO.bindVertexArrayOES(null);
 	}
 }

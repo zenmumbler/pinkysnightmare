@@ -1,76 +1,169 @@
 // Part of Pinky's Nightmare
 // (c) 2015 by Arthur Langereis - @zenmumbler
 
-import { assert } from "./util.js";
+import { Float } from "stardazed/core";
+import { VertexAttributeStream, VertexAttributeRole, VertexAttributeMapping, GeometryBuilder } from "stardazed/geometry";
 
-export interface ObjData {
-	elements: number;
-	vertexes: number[];
-	normals: number[];
-	uvs: number[];
+interface OBJPreProcSource {
+	lines: string[];
+	mtlFilePath?: string;
+
+	positionCount: number;
+	normalCount: number;
+	uvCount: number;
+
+	vertexCount: number;
 }
 
-function loadObj(text: string, then: (d: ObjData) => void) {
-	const t0 = performance.now();
-	const lines = text.split("\n");
-	const vv: number[][] = [], nn: number[][] = [], tt: number[][] = [];
-	const vertexes: number[] = [], normals: number[] = [], uvs: number[] = [];
 
-	function vtx(vx: number, tx: number, nx: number) {
-		assert(vx < vv.length, "vx out of bounds " + vx);
-		assert(tx < tt.length, "tx out of bounds " + tx);
-		assert(nx < nn.length, "nx out of bounds " + nx);
+function preflightOBJSource(text: string) {
+	const preproc: OBJPreProcSource = {
+		lines: [],
+		positionCount: 0,
+		normalCount: 0,
+		uvCount: 0,
+		vertexCount: 0
+	};
 
-		const v = vv[vx],
-			t = tx > -1 ? tt[tx] : null,
-			n = nn[nx];
+	// split text into lines and remove trailing/leading whitespace and empty lines
+	preproc.lines = text.split("\n").map(l => l.trim()).filter(l => l.length > 0);
 
-		vertexes.push(v[0], v[1], v[2]);
-		normals.push(n[0], n[1], n[2]);
-		if (t) {
-			uvs.push(t[0], t[1]);
+	// scan for the mtllib declaration (if any) and do a counting preflight
+	for (const line of preproc.lines) {
+		const tokens = line.split(/ +/);
+		const directive = tokens[0];
+		if (directive === "v") { preproc.positionCount += 1; }
+		else if (directive === "vn") { preproc.normalCount += 1; }
+		else if (directive === "vt") { preproc.uvCount += 1; }
+		else if (directive === "f") { preproc.vertexCount += tokens.length - 1; }
+		else if (directive === "mtllib") {
+			if (tokens[1]) {
+				preproc.mtlFilePath = tokens[1];
+			}
+			else {
+				console.warn("OBJ parser: ignoring empty mtllib reference.");
+			}
 		}
 	}
+
+	return preproc;
+}
+
+
+function loadObj(preproc: OBJPreProcSource, fixedColour: number[]) {
+	const positions: Float32Array = new Float32Array(preproc.positionCount * 3);
+	const positionIndexes = new Uint32Array(preproc.vertexCount);
+	const streams: VertexAttributeStream[] = [];
+	let normalValues: Float32Array | undefined;
+	let uvValues: Float32Array | undefined;
+	let normalIndexes: Uint32Array | undefined;
+	let uvIndexes: Uint32Array | undefined;
+	let posIx = 0, normIx = 0, uvIx = 0, vertexIx = 0; //, curMatIx = 0;
+
+	if (preproc.normalCount > 0) {
+		normalValues = new Float32Array(preproc.normalCount * 3);
+		normalIndexes = new Uint32Array(preproc.vertexCount);
+
+		streams.push({
+			name: "normals",
+			includeInMesh: true,
+			mapping: VertexAttributeMapping.Vertex,
+			attr: { type: Float, width: 3, role: VertexAttributeRole.Normal },
+			values: normalValues,
+			indexes: normalIndexes
+		});
+	}
+	if (preproc.uvCount > 0) {
+		uvValues = new Float32Array(preproc.uvCount * 2);
+		uvIndexes = new Uint32Array(preproc.vertexCount);
+
+		streams.push({
+			name: "uvs",
+			includeInMesh: true,
+			mapping: VertexAttributeMapping.Vertex,
+			attr: { type: Float, width: 2, role: VertexAttributeRole.UV },
+			values: uvValues,
+			indexes: uvIndexes
+		});
+	}
+	streams.push({
+		name: "colour",
+		includeInMesh: true,
+		mapping: VertexAttributeMapping.SingleValue,
+		attr: { type: Float, width: 3, role: VertexAttributeRole.Colour },
+		values: new Float32Array(fixedColour)
+	});
+
+	const builder = new GeometryBuilder({ positions, positionIndexes, streams });
+
+	// map each material's name to its index
+	// let nextNamedMatIx = 0;
 
 	// convert a face index to zero-based int or -1 for empty index
 	function fxtoi(fx: string) { return (+fx) - 1; }
 
-	for (const line of lines) {
-		const tokens = line.split(" ");
+	for (const line of preproc.lines) {
+		const tokens = line.split(/ +/);
 		switch (tokens[0]) {
 			case "v":
-				vv.push([parseFloat(tokens[1]), parseFloat(tokens[2]), parseFloat(tokens[3])]);
+				positions[posIx] = parseFloat(tokens[1]);
+				positions[posIx + 1] = parseFloat(tokens[2]);
+				positions[posIx + 2] = parseFloat(tokens[3]);
+				posIx += 3;
 				break;
 			case "vn":
-				nn.push([parseFloat(tokens[1]), parseFloat(tokens[2]), parseFloat(tokens[3])]);
+				normalValues![normIx] = parseFloat(tokens[1]);
+				normalValues![normIx + 1] = parseFloat(tokens[2]);
+				normalValues![normIx + 2] = parseFloat(tokens[3]);
+				normIx += 3;
 				break;
 			case "vt":
-				tt.push([parseFloat(tokens[1]), parseFloat(tokens[2])]);
+				uvValues![uvIx] = parseFloat(tokens[1]);
+				uvValues![uvIx + 1] = -parseFloat(tokens[2]);
+				uvIx += 2;
 				break;
-			case "f":
-				vtx.apply(null, tokens[1].split("/").map(fxtoi) as any);
-				vtx.apply(null, tokens[2].split("/").map(fxtoi) as any);
-				vtx.apply(null, tokens[3].split("/").map(fxtoi) as any);
+			case "f": {
+				const vi: number[] = [];
+				for (let fvix = 1; fvix < tokens.length; ++fvix) {
+					const fix = tokens[fvix].split("/").map(fxtoi);
+					positionIndexes[vertexIx] = fix[0];
+					if (uvIndexes && fix[1] > -1) {
+						uvIndexes[vertexIx] = fix[1];
+					}
+					if (normalIndexes && fix[2] > -1) {
+						normalIndexes[vertexIx] = fix[2];
+					}
+					vi.push(vertexIx);
+					vertexIx += 1;
+				}
+
+				builder.addPolygon(vi, vi);
 				break;
+			}
+			case "usemtl": {
+				// const newMatIx = modelMeta.materialIndexMap[tokens[1]];
+				// if (newMatIx === undefined) {
+				// 	modelMeta.materialIndexMap[tokens[1]] = nextNamedMatIx;
+				// 	curMatIx = nextNamedMatIx;
+				// 	nextNamedMatIx += 1;
+				// }
+				// else {
+				// 	curMatIx = newMatIx;
+				// }
+				// builder.setGroup(curMatIx);
+				break;
+			}
 
 			default: break;
 		}
 	}
 
-	const t1 = performance.now();
-	console.info("obj v:", vertexes.length / 3, "n:", normals.length / 3, "t:", uvs.length / 2, "took:", (t1 - t0) | 0, "ms");
-	then({ elements: vertexes.length / 3, vertexes, normals, uvs });
+	return builder.complete();
 }
 
-
-export function loadObjFile(fileName: string, then: (d: ObjData) => void) {
-	const xhr = new XMLHttpRequest();
-	xhr.open("GET", fileName);
-
-	xhr.onreadystatechange = function() {
-		if (xhr.readyState !== 4) { return; }
-		assert(xhr.status === 200 || xhr.status === 0);
-		loadObj(xhr.responseText, then);
-	};
-	xhr.send();
+export async function loadObjFile(fileName: string, fixedColour: number[]) {
+	const resp = await fetch(fileName);
+	const text = await resp.text();
+	const preproc = preflightOBJSource(text);
+	return loadObj(preproc, fixedColour);
 }
