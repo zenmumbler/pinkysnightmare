@@ -17,7 +17,7 @@ interface State {
 	keys: boolean[];
 	meshes: Record<string, RenderMesh>;
 	textures: Record<string, RenderTexture>;
-	models: Record<string, RenderModel>;
+	mapModel: RenderModel;
 	keyItems: Key[];
 	pacs: Abomination[];
 	player: Player;
@@ -756,7 +756,7 @@ function drawScene(camera: Camera) {
 	const pass = renderer.createPass(camera.projectionMatrix, camera.viewMatrix);
 
 	// -- PLAIN MODELS
-	pass.draw({ model: state.models.map, program: state.modelProgram });
+	pass.draw({ model: state.mapModel, program: state.modelProgram });
 	state.player.draw(pass);
 	state.keyItems.forEach(function(key) { key.draw(pass); });
 
@@ -834,7 +834,7 @@ function init() {
 		keyItems: [],
 		textures: {},
 		meshes: {},
-		models: {},
+		// models: {},
 		pacs: []
 	} as any as State;
 
@@ -880,8 +880,7 @@ function init() {
 	});
 
 	genMapMesh(renderer, async function(mapData) {
-		state.meshes["map"] = mapData.mesh;
-		state.models["map"] = renderer.createModel([mapData.mesh]);
+		state.mapModel = renderer.createModel([mapData.mesh]);
 		state.camera.fixedPoints = mapData.cameras;
 		state.grid = new Grid(mapData.gridW, mapData.gridH, mapData.grid, mapData.path);
 		state.cornerColors = mapData.cornerColors;
