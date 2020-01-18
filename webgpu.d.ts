@@ -419,10 +419,77 @@ interface GPUCommandBuffer extends GPUObjectBase {
 }
 
 
+interface GPUBufferCopyView {
+	buffer: GPUBuffer;
+	offset?: GPUBufferSize;
+	rowPitch?: number;
+	imageHeight?: number;
+}
+
+interface GPUTextureCopyView {
+	texture: GPUTexture;
+	mipLevel?: number;
+	arrayLayer?: number;
+	origin?: GPUOrigin3D;
+}
+
+interface GPUImageBitmapCopyView {
+	imageBitmap: ImageBitmap;
+	origin: GPUOrigin2D;
+}
+
+interface GPUProgrammablePassEncoder {
+	setBindGroup(index: number, bindGroup: GPUBindGroup, dynamicOffets?: number[]): void;
+	setBindGroup(index: number, bindGroup: GPUBindGroup, dynamicOffsetsData: Uint32Array,
+		dynamicOffsetsDataStart: number, dynamicOffsetsDataLength: number): void;
+	
+	pushDebugGroup(groupLabel: string): void;
+	popDebugGroup(): void;
+	insertDebugMarker(markerLabel: string): void;
+}
+
+interface GPUComputePassDescriptor extends GPUObjectDescriptorBase {
+	// no properties, no need for branding
+}
+
+interface GPUComputePassEncoder extends GPUObjectBase, GPUProgrammablePassEncoder {
+	
+}
+
 interface GPUCommandEncoderDescriptor extends GPUObjectDescriptorBase {
+	// no properties, no need for branding
 }
 
 interface GPUCommandEncoder extends GPUObjectBase {
+	beginRenderPass(descriptor: GPURenderPassDescriptor): GPURenderPassEncoder;
+	beginComputePass(descriptor: GPUComputePassDescriptor): GPUComputePassEncoder;
+
+	copyBufferToBuffer(
+		source: GPUBuffer, sourceOffset: GPUBufferSize,
+		desination: GPUBuffer, destinationOffset: GPUBufferSize,
+		size: GPUBufferSize
+	): void;
+	copyBufferToTexture(
+		source: GPUBufferCopyView,
+		destination: GPUTextureCopyView,
+		copySize: GPUExtent3D
+	): void;
+	copyTextureToBuffer(
+		source: GPUTextureCopyView,
+		destination: GPUBufferCopyView,
+		copySize: GPUExtent3D
+	): void;
+	copyTextureToTexture(
+		source: GPUTextureCopyView,
+		destination: GPUTextureCopyView,
+		copySize: GPUExtent3D
+	): void;
+
+	pushDebugGroup(groupLabel: string): void;
+	popDebugGroup(): void;
+	insertDebugMarker(markerLabel: string): void;
+
+	finish(descriptor?: GPUCommandBufferDescriptor): GPUCommandBuffer;
 }
 
 
