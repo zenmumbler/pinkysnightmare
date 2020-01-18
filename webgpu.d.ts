@@ -453,8 +453,64 @@ interface GPUComputePassDescriptor extends GPUObjectDescriptorBase {
 }
 
 interface GPUComputePassEncoder extends GPUObjectBase, GPUProgrammablePassEncoder {
-	
+	setPipeline(pipeline: GPUComputePipeline): void;
+	dispatch(x: number, y?: number, z?: number): void;
+	dispatchIndirect(indirectBuffer: GPUBuffer, indirectOffset: GPUBufferSize): void;
+
+	endPass(): void;
 }
+
+
+interface GPURenderEncodeBase {
+	setPipeline(pipeline: GPURenderPipeline): void;
+
+	setIndexBuffer(buffer: GPUBuffer, offset?: GPUBufferSize): void;
+	setVertexBuffer(slot: number, buffer: GPUBuffer, offset?: GPUBufferSize): void;
+
+	draw(vertexCount: number, instanceCount: number, firstVertex: number, firstInstance: number): void;
+	drawIndexed(indexCount: number, instanceCount: number, firstIndex: number, baseVertex: number, firstInstance: number): void;
+
+	drawIndirect(indirectBuffer: GPUBuffer, indirectOffset: GPUBufferSize): void;
+	drawIndexedIndirect(indirectBuffer: GPUBuffer, indirectOffset: GPUBufferSize): void;
+}
+
+type GPULoadOp = "load";
+
+type GPUStoreOp = "store" | "clear";
+
+interface GPURenderPassColorAttachmentDescriptor {
+	attachment: GPUTextureView;
+	resolveTarget?: GPUTextureView;
+
+	loadValue: GPULoadOp | GPUColor;
+	storeOp?: GPUStoreOp;
+}
+
+interface GPURenderPassDepthStencilAttachmentDescriptor {
+	attachment: GPUTextureView;
+
+	depthLoadValue: GPULoadOp | number;
+	depthStoreOp: GPUStoreOp;
+
+	stencilLoadValue: GPULoadOp | number;
+	stencilStoreOp: GPUStoreOp;
+}
+
+interface GPURenderPassDescriptor extends GPUObjectDescriptorBase {
+	colorAttachments: GPURenderPassColorAttachmentDescriptor[];
+	depthStencilAttachment?: GPURenderPassDepthStencilAttachmentDescriptor;
+}
+
+interface GPURenderPassEncoder extends GPUObjectBase, GPUProgrammablePassEncoder, GPURenderEncodeBase {
+	setViewport(x: number, y: number, width: number, height: number, minDepth: number, maxDepth: number): void;
+	setScissorRect(x: number, y: number, width: number, height: number): void;
+	setBlendColor(color: GPUColor): void;
+	setStencilReference(reference: number): void;
+
+	executeBundles(bundles: GPURenderBundle[]): void;
+	endPass(): void;
+}
+
 
 interface GPUCommandEncoderDescriptor extends GPUObjectDescriptorBase {
 	// no properties, no need for branding
@@ -493,15 +549,107 @@ interface GPUCommandEncoder extends GPUObjectBase {
 }
 
 
+interface GPURenderBundleDescriptor extends GPUObjectDescriptorBase {
+	// no properties, no need for branding
+}
+
+interface GPURenderBundle extends GPUObjectBase {
+	// no properties, added branding field for TS disambiguation
+	readonly __WEBGPU_RENDERBUNDLE__?: never;
+}
+
 interface GPURenderBundleEncoderDescriptor extends GPUObjectDescriptorBase {
+	colorFormats: GPUTextureFormat[];
+	depthStencilFormat?: GPUTextureFormat;
+	sampleCount?: number;
 }
 
-interface GPURenderBundleEncoder extends GPUObjectBase {
+interface GPURenderBundleEncoder extends GPUObjectBase, GPUProgrammablePassEncoder, GPURenderEncodeBase {
+	finish(descriptor?: GPURenderBundleDescriptor): GPURenderBundle;
 }
 
 
-interface GPUQueue {
+interface GPUQueue extends GPUObjectBase {
+	submit(commandBuffers: GPUCommandBuffer[]): void;
+
+	createFence(descriptor?: GPUFenceDescriptor): GPUFence;
+	signal(fence: GPUFence, signalValue: number): void;
+
+	copyImageBitmapToTexture(
+		source: GPUImageBitmapCopyView,
+		destination: GPUTextureCopyView,
+		copySize: GPUExtent3D
+	): void;
 }
+
+
+interface GPUFenceDescriptor extends GPUObjectDescriptorBase {
+	initialValue?: number;
+}
+
+interface GPUFence extends GPUObjectBase {
+	getCompletedValue(): number;
+	onCompletion(completionValue: number): Promise<void>;
+}
+
+
+interface GPUCanvasContext {
+	configureSwapChain(descriptor: GPUSwapChainDescriptor): GPUSwapChain;
+	getSwapChainPreferredFormat(device: GPUDevice): Promise<GPUTextureFormat>;
+}
+
+interface GPUSwapChainDescriptor extends GPUObjectDescriptorBase {
+	device: GPUDevice;
+	format: GPUTextureFormat;
+	usage?: GPUTextureUsageFlags;
+}
+
+interface GPUSwapChain extends GPUObjectBase {
+	getCurrentTexture(): GPUTexture;
+}
+
+interface HTMLCanvasElement {
+    getContext(contextId: "gpu"): GPUCanvasContext | null;
+}
+
+
+interface GPUDeviceLostInfo {
+	readonly message: string;
+}
+
+interface GPUOutOfMemoryError {
+	// no properties, added branding field for TS disambiguation
+	readonly __WEBGPU_OUTOFMEMORYERROR__?: never;
+}
+interface GPUOutOfMemoryErrorConstructor {
+	new(): GPUOutOfMemoryError;
+}
+declare const GPUOutOfMemoryError: GPUOutOfMemoryErrorConstructor;
+
+interface GPUValidationError {
+	readonly message: string;
+	readonly __WEBGPU_VALIDATIONERROR__?: never;
+}
+interface GPUValidationErrorConstructor {
+	new(message: string): GPUValidationError;
+}
+declare const GPUValidationError: GPUValidationErrorConstructor;
+
+type GPUError = GPUOutOfMemoryError | GPUValidationError;
+
+type GPUErrorFilter = "none" | "out-of-memory" | "validation";
+
+
+interface GPUUncapturedErrorEvent extends Event {
+	readonly error: GPUError;
+}
+interface GPUUncapturedErrorEventInit extends EventInit {
+	error: GPUError;
+}
+interface GPUUncapturedErrorEventConstructor {
+	new(type: string, gpuUncapturedErrorEventInitDict: GPUUncapturedErrorEventInit): GPUUncapturedErrorEvent;
+}
+declare const GPUUncapturedErrorEvent: GPUUncapturedErrorEventConstructor;
 
 
 type GPUExtensionName = "anisotropic-filtering";
@@ -515,6 +663,11 @@ interface GPULimits {
 	maxStorageBuffersPerShaderStage?: number;
 	maxStorageTexturesPerShaderStage?: number;
 	maxUniformBuffersPerShaderStage?: number;
+}
+
+interface GPUDeviceDescriptor {
+	extensions?: GPUExtensionName[];
+	limits?: GPULimits;
 }
 
 interface GPUDevice extends GPUObjectBase, EventTarget {
@@ -539,20 +692,18 @@ interface GPUDevice extends GPUObjectBase, EventTarget {
 	createRenderPipeline(descriptor: GPURenderPipelineDescriptor): GPURenderPipeline;
 	createCommandEncoder(descriptor?: GPUCommandEncoderDescriptor): GPUCommandEncoder;
 	createRenderBundleEncoder(descriptor: GPURenderBundleEncoderDescriptor): GPURenderBundleEncoder;
+
+	// fatal errors (§20.1)
+	readonly lost: Promise<GPUDeviceLostInfo>;
+
+	// error scopes (§20.2)
+	pushErrorScope(filter: GPUErrorFilter): void;
+	popErrorScope(): Promise<GPUError | void>;
+
+	// telemetry (§20.3)
+	onuncapturederror: ((event: GPUUncapturedErrorEvent) => any) | null;
 }
 
-interface GPUDeviceDescriptor {
-	extensions?: GPUExtensionName[];
-	limits?: GPULimits;
-}
-
-
-interface GPUAdapter {
-	readonly name: string;
-	readonly extensions: ReadonlyArray<GPUExtensionName>;
-
-	requestDevice(descriptor?: GPUDeviceDescriptor): Promise<GPUDevice>;
-}
 
 type GPUPowerPreference = "low-power" | "high-performance";
 
@@ -560,6 +711,12 @@ interface GPURequestAdapterOptions {
 	powerPreference?: GPUPowerPreference;
 }
 
+interface GPUAdapter {
+	readonly name: string;
+	readonly extensions: ReadonlyArray<GPUExtensionName>;
+
+	requestDevice(descriptor?: GPUDeviceDescriptor): Promise<GPUDevice>;
+}
 
 interface GPU {
 	requestAdapter(options?: GPURequestAdapterOptions): Promise<GPUAdapter>;
