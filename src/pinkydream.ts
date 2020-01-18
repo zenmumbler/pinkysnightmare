@@ -62,6 +62,7 @@ class Camera {
 
 		this.projectionMatrix = mat4.create();
 		mat4.perspective(this.projectionMatrix, deg2rad(65), w / h, 0.05, 100.0);
+		// mat4.perspective(this.projectionMatrix, deg2rad(65), w / h, 1, 400.0);
 		this.viewMatrix = mat4.create();
 	}
 
@@ -119,6 +120,7 @@ class Camera {
 		vec3.scale(playerPos, playerPos, LEVEL_SCALE);
 
 		mat4.lookAt(this.viewMatrix, camPos, playerPos, [0, 1, 0]);
+		// mat4.lookAt(this.viewMatrix, [114, 250, 130], [114, 0, 130], [0, 0, 1]);
 	}
 }
 
