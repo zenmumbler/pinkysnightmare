@@ -58,7 +58,7 @@ function loadObj(preproc: OBJPreProcSource, fixedColour: number[]) {
 	let uvValues: Float32Array | undefined;
 	let normalIndexes: Uint32Array | undefined;
 	let uvIndexes: Uint32Array | undefined;
-	let posIx = 0, normIx = 0, uvIx = 0, vertexIx = 0; //, curMatIx = 0;
+	let posIx = 0, normIx = 0, uvIx = 0, vertexIx = 0; // , curMatIx = 0;
 
 	if (preproc.normalCount > 0) {
 		normalValues = new Float32Array(preproc.normalCount * 3);

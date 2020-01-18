@@ -22,7 +22,7 @@ export function createStandardTexture(gl: WebGLRenderingContext, fileName: strin
 		};
 
 		image.src = fileName;
-	})
+	});
 }
 
 function getShader(gl: WebGLRenderingContext, id: string) {
@@ -115,7 +115,7 @@ export function quickGeometry(positions: NumArray, normals: NumArray, colours: N
 	vb.fieldView(0).copyValuesFrom(positions, vertexCount);
 	vb.fieldView(1).copyValuesFrom(normals, vertexCount);
 	vb.fieldView(2).copyValuesFrom(colours, vertexCount);
-	if (uvs) vb.fieldView(3).copyValuesFrom(uvs, vertexCount);
+	if (uvs) { vb.fieldView(3).copyValuesFrom(uvs, vertexCount); }
 	return geom;
 }
 
@@ -138,8 +138,8 @@ export class TriMesh {
 			gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.giBuffer);
 			gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, geom.indexBuffer.data, gl.STATIC_DRAW);
 
-			if (geom.indexBuffer.elementType === UInt8) this.indexType = gl.UNSIGNED_BYTE;
-			else this.indexType = gl.UNSIGNED_SHORT;
+			if (geom.indexBuffer.elementType === UInt8) { this.indexType = gl.UNSIGNED_BYTE; }
+			else { this.indexType = gl.UNSIGNED_SHORT; }
 		}
 
 		const extVAO = gl.getExtension("OES_vertex_array_object");
