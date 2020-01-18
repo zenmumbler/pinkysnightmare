@@ -1,14 +1,13 @@
 // Pinky's Nightmare
 // An entry for LD33 Game Jampo — You are the Monster
-// (c) 2015 by Arthur Langereis — @zenmumbler
+// (c) 2015-2020 by Arthur Langereis — @zenmumbler
 
-import { vec2, vec3, mat2, mat3, mat4 } from "stardazed/vector";
+import { vec2, vec3, mat2, mat4 } from "stardazed/vector";
 import { $1, on, show, hide, assert } from "./util.js";
-import { createStandardProgram, createStandardTexture, TriMesh, u8Color, StandardProgram, quickGeometry } from "./asset.js";
+import { u8Color, quickGeometry } from "./asset.js";
+import { Renderer, RenderTexture, RenderMesh, RenderModel, WebGLRenderer, RenderProgram, RenderPass } from "./render";
 import { LEVEL_SCALE, genMapMesh, CameraPoint } from "./levelgen.js";
 import { loadObjFile } from "./objloader.js";
-
-let gl: WebGLRenderingContext;
 
 interface State {
 	t0: number;
@@ -16,9 +15,9 @@ interface State {
 	tLast: number;
 
 	keys: boolean[];
-	meshes: Record<string, TriMesh>;
-	textures: Record<string, WebGLTexture>;
-	models: Record<string, Model>;
+	meshes: Record<string, RenderMesh>;
+	textures: Record<string, RenderTexture>;
+	models: Record<string, RenderModel>;
 	keyItems: Key[];
 	pacs: Abomination[];
 	player: Player;
@@ -27,12 +26,13 @@ interface State {
 	end: End;
 	camera: Camera;
 
-	modelProgram: StandardProgram;
-	texturedProgram: StandardProgram;
+	modelProgram: RenderProgram;
+	texturedProgram: RenderProgram;
 	cornerColors: number[][];
 }
 
 let state: State;
+let renderer: Renderer;
 
 let active = true, mode = "title";
 
@@ -45,59 +45,6 @@ const KEY_UP = 38, KEY_DOWN = 40, KEY_LEFT = 37, KEY_RIGHT = 39,
 function intRandom(choices: number) {
 	return (Math.random() * choices) | 0;
 }
-
-class Model {
-	meshes: TriMesh[];
-	texture: WebGLTexture | undefined;
-
-	scaleMat = mat4.create();
-	rotMat = mat4.create();
-	transMat = mat4.create();
-	modelMatrix = mat4.create();
-	modelViewMatrix = mat4.create();
-	normalMatrix = mat3.create();
-
-	constructor(meshes: TriMesh[], texture?: WebGLTexture) {
-		this.meshes = meshes;
-		this.texture = texture;
-	}
-
-	draw(camera: Camera, program: StandardProgram, meshIndex: number) {
-		mat4.multiply(this.modelMatrix, this.transMat, this.rotMat);
-		mat4.multiply(this.modelMatrix, this.modelMatrix, this.scaleMat);
-
-		// this.debugModelMatrix = mat4.clone(modelMatrix);
-
-		mat4.multiply(this.modelViewMatrix, camera.viewMatrix, this.modelMatrix);
-		gl.uniformMatrix4fv(program.mvMatrixUniform, false, this.modelViewMatrix);
-
-		if (program.normalMatrixUniform) {
-			mat3.fromMat4(this.normalMatrix, this.modelViewMatrix);
-			mat3.invert(this.normalMatrix, this.normalMatrix);
-			mat3.transpose(this.normalMatrix, this.normalMatrix);
-			gl.uniformMatrix3fv(program.normalMatrixUniform, false, this.normalMatrix);
-		}
-
-		this.meshes[meshIndex].draw(gl, program, this.texture);
-	}
-
-	setUniformScale(s: number) {
-		mat4.fromScaling(this.scaleMat, [s, s, s]);
-	}
-
-	setScale(sx: number, sy: number, sz: number) {
-		mat4.fromScaling(this.scaleMat, [sx, sy, sz]);
-	}
-
-	setPosition(v3: NumArray) {
-		mat4.fromTranslation(this.transMat, v3);
-	}
-
-	setRotation(axis: NumArray, angle: number) {
-		mat4.fromRotation(this.rotMat, angle, axis);
-	}
-}
-
 
 function deg2rad(deg: number) {
 	return deg * 3.14159265358979323846 / 180.0;
@@ -112,7 +59,6 @@ class Camera {
 	constructor(canvas: HTMLCanvasElement) {
 		const w = canvas.width;
 		const h = canvas.height;
-		gl.viewport(0, 0, w, h);
 
 		this.projectionMatrix = mat4.create();
 		mat4.perspective(this.projectionMatrix, deg2rad(65), w / h, 0.05, 100.0);
@@ -391,8 +337,8 @@ class Grid {
 
 
 class Key {
-	keyModel: Model;
-	lockModel: Model;
+	keyModel: RenderModel;
+	lockModel: RenderModel;
 	index: number;
 	found: boolean;
 	keyPosition: NumArray;
@@ -403,8 +349,8 @@ class Key {
 	lockRotMax: number;
 
 	constructor(index: number) {
-		this.keyModel = new Model([state.meshes["key"]]);
-		this.lockModel = new Model([state.meshes["lock"]]);
+		this.keyModel = renderer.createModel([state.meshes["key"]]);
+		this.lockModel = renderer.createModel([state.meshes["lock"]]);
 		this.index = index;
 		this.found = false;
 		this.keyPosition = vec3.create();
@@ -457,14 +403,14 @@ class Key {
 		}
 	}
 
-	draw() {
+	draw(pass: RenderPass) {
 		if (! this.found) {
 			this.keyModel.setRotation(this.rotAxis, state.tCur * 1.3);
-			this.keyModel.draw(state.camera, state.modelProgram, 0);
+			pass.draw({ model: this.keyModel, program: state.modelProgram });
 
 			const lrt = this.lockRotMax * Math.sin(state.tCur * 2);
 			this.lockModel.setRotation(this.lockRotAxis, lrt);
-			this.lockModel.draw(state.camera, state.modelProgram, 0);
+			pass.draw({ model: this.lockModel, program: state.modelProgram });
 		}
 	}
 }
@@ -501,20 +447,20 @@ function makeDoorMesh(cornerColors: number[][]) {
 
 	nrm6([0, 1, 0]);
 
-	return new TriMesh(gl, quickGeometry(vertexes, normals, colors, uvs));
+	return renderer.createMesh(quickGeometry(vertexes, normals, colors, uvs));
 }
 
 
 class Door {
-	mesh: TriMesh;
-	model: Model;
+	mesh: RenderMesh;
+	model: RenderModel;
 	state: "closed" | "opening" | "open";
 	position: MutNumArray;
 	openT0 = 0;
 
 	constructor() {
 		this.mesh = makeDoorMesh(state.cornerColors);
-		this.model = new Model([this.mesh], state.textures["door"]);
+		this.model = renderer.createModel([this.mesh], state.textures["door"]);
 
 		this.state = "closed";
 
@@ -563,8 +509,8 @@ class Door {
 		}
 	}
 
-	draw() {
-		this.model.draw(state.camera, state.texturedProgram, 0);
+	draw(pass: RenderPass) {
+		pass.draw({ model: this.model, program: state.texturedProgram });
 	}
 }
 
@@ -599,7 +545,7 @@ class End {
 
 
 class Player {
-	model = new Model([state.meshes["spookje"]]);
+	model = renderer.createModel([state.meshes["spookje"]]);
 	position = vec3.fromValues(0, 0.3, 0); // grid units
 	viewAngle = Math.PI / -2; // radians
 	turnSpeed = Math.PI; // radians / sec
@@ -686,17 +632,17 @@ class Player {
 		this.position[1] = 0.35 + 0.05 * Math.sin(state.tCur * 3);
 	}
 
-	draw() {
+	draw(pass: RenderPass) {
 		const scaledPos = vec3.scale([], this.position, LEVEL_SCALE);
 		this.model.setPosition(scaledPos);
 		this.model.setRotation(this.rotAxis, -this.viewAngle);
-		this.model.draw(state.camera, state.modelProgram, 0);
+		pass.draw({ model: this.model, program: state.modelProgram });
 	}
 }
 
 
 class Abomination {
-	model = new Model([state.meshes["pac1"], state.meshes["pac2"]], state.textures["crackpac"]);
+	model = renderer.createModel([state.meshes["pac1"], state.meshes["pac2"]], state.textures["crackpac"]);
 	phase = "move";
 	nextDir: Direction = "north";
 	pathStep = 0;
@@ -798,53 +744,25 @@ class Abomination {
 		}
 	}
 
-	draw() {
-		this.model.draw(state.camera, state.texturedProgram, 1 - (this.pathStep & 1));
+	draw(pass: RenderPass) {
+		pass.draw({ model: this.model, program: state.texturedProgram, meshIndex: 1 - (this.pathStep & 1) });
 	}
 }
 
 
 function drawScene(camera: Camera) {
-	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+	const pass = renderer.createPass(camera.projectionMatrix, camera.viewMatrix);
 
 	// -- PLAIN MODELS
-	gl.useProgram(state.modelProgram);
-	gl.uniformMatrix4fv(state.modelProgram.projMatrixUniform, false, camera.projectionMatrix);
-	if (state.modelProgram.timeUniform) {
-		gl.uniform1f(state.modelProgram.timeUniform, state.tCur);
-	}
-
-	state.models.map.draw(camera, state.modelProgram, 0);
-	state.player.draw();
-	state.keyItems.forEach(function(key) { key.draw(); });
+	pass.draw({ model: state.models.map, program: state.modelProgram });
+	state.player.draw(pass);
+	state.keyItems.forEach(function(key) { key.draw(pass); });
 
 	// -- TEXTURED MODELS
-	gl.useProgram(state.texturedProgram);
-	gl.uniformMatrix4fv(state.texturedProgram.projMatrixUniform, false, camera.projectionMatrix);
-	if (state.texturedProgram.timeUniform) {
-		gl.uniform1f(state.texturedProgram.timeUniform, state.tCur);
-	}
+	state.door.draw(pass);
+	state.pacs.forEach(function(pac) { pac.draw(pass); });
 
-	state.door.draw();
-	state.pacs.forEach(function(pac) { pac.draw(); });
-}
-
-function setupGL(then: (c: Camera) => void) {
-	const canvas = document.getElementById("stage") as HTMLCanvasElement;
-	try {
-		gl = canvas.getContext("webgl")!;
-	} catch (e) {
-		// gl = null;
-	}
-
-	if (! gl) {
-		alert("Could not initialise WebGL");
-	}
-	else {
-		gl.clearColor(0.1, 0.0, 0.05, 1.0);
-		gl.enable(gl.DEPTH_TEST);
-		then(new Camera(canvas));
-	}
+	pass.finish();
 }
 
 function nextFrame() {
@@ -918,74 +836,76 @@ function init() {
 		pacs: []
 	} as any as State;
 
-	setupGL(function(camera) {
-		state.camera = camera;
-		state.modelProgram = createStandardProgram(gl, "standardVert", "standardFrag");
-		state.texturedProgram = createStandardProgram(gl, "texturedVert", "texturedFrag");
+	const canvas = document.querySelector("canvas")!;
+	renderer = new WebGLRenderer();
+	renderer.setup(canvas);
+	state.camera = new Camera(canvas);
 
-		window.onkeydown = function(evt: KeyboardEvent) {
-			const kc = evt.keyCode;
-			state.keys[kc] = true;
-			if (! evt.metaKey) {
-				evt.preventDefault();
-			}
-		};
-		window.onkeyup = function(evt: KeyboardEvent) {
-			const kc = evt.keyCode;
-			state.keys[kc] = false;
-			if (! evt.metaKey) {
-				evt.preventDefault();
-			}
-		};
-		window.onblur = function() { active = false; state.keys = []; };
-		window.onfocus = function() {
-			active = true;
-			if (mode === "game") {
-				state.tLast = (Date.now() / 1000.0) - state.t0;
-				nextFrame();
-			}
-		};
+	state.modelProgram = renderer.createProgram("standard");
+	state.texturedProgram = renderer.createProgram("textured");
 
-		on("#run", "click", function() {
-			hide("#run");
-			hide("#victory");
-			run();
-		});
+	window.onkeydown = function(evt: KeyboardEvent) {
+		const kc = evt.keyCode;
+		state.keys[kc] = true;
+		if (! evt.metaKey) {
+			evt.preventDefault();
+		}
+	};
+	window.onkeyup = function(evt: KeyboardEvent) {
+		const kc = evt.keyCode;
+		state.keys[kc] = false;
+		if (! evt.metaKey) {
+			evt.preventDefault();
+		}
+	};
+	window.onblur = function() { active = false; state.keys = []; };
+	window.onfocus = function() {
+		active = true;
+		if (mode === "game") {
+			state.tLast = (Date.now() / 1000.0) - state.t0;
+			nextFrame();
+		}
+	};
 
-		on("#victory", "click", function() {
-			location.reload();
-		});
-
-		genMapMesh(gl, async function(mapData) {
-			state.meshes["map"] = mapData.mesh;
-			state.models["map"] = new Model([mapData.mesh]);
-			state.camera.fixedPoints = mapData.cameras;
-			state.grid = new Grid(mapData.gridW, mapData.gridH, mapData.grid, mapData.path);
-			state.cornerColors = mapData.cornerColors;
-
-			const pacColor = u8Color(213, 215, 17);
-
-			state.textures["door"] = await createStandardTexture(gl, "assets/doortex.png");
-			state.textures["crackpac"] = await createStandardTexture(gl, "assets/crackpac.png");
-
-			const pac1Geom = await loadObjFile("assets/pac1.obj", pacColor);
-			state.meshes["pac1"] = new TriMesh(gl, pac1Geom);
-
-			const pac2Geom = await loadObjFile("assets/pac2.obj", pacColor);
-			state.meshes["pac2"] = new TriMesh(gl, pac2Geom);
-
-			const keyGeom = await loadObjFile("assets/key.obj", u8Color(201, 163, 85));
-			state.meshes["key"] = new TriMesh(gl, keyGeom);
-
-			const lockGeom = await loadObjFile("assets/lock.obj", u8Color(0x66, 0x77, 0x88));
-			state.meshes["lock"] = new TriMesh(gl, lockGeom);
-
-			const spookjeGeom = await loadObjFile("assets/spookje.obj", u8Color(255, 184, 221));
-			state.meshes["spookje"] = new TriMesh(gl, spookjeGeom);
-
-			showTitle();
-		}); // map
+	on("#run", "click", function() {
+		hide("#run");
+		hide("#victory");
+		run();
 	});
+
+	on("#victory", "click", function() {
+		location.reload();
+	});
+
+	genMapMesh(renderer, async function(mapData) {
+		state.meshes["map"] = mapData.mesh;
+		state.models["map"] = renderer.createModel([mapData.mesh]);
+		state.camera.fixedPoints = mapData.cameras;
+		state.grid = new Grid(mapData.gridW, mapData.gridH, mapData.grid, mapData.path);
+		state.cornerColors = mapData.cornerColors;
+
+		const pacColor = u8Color(213, 215, 17);
+
+		state.textures["door"] = await renderer.createTexture("assets/doortex.png");
+		state.textures["crackpac"] = await renderer.createTexture("assets/crackpac.png");
+
+		const pac1Geom = await loadObjFile("assets/pac1.obj", pacColor);
+		state.meshes["pac1"] = renderer.createMesh(pac1Geom);
+
+		const pac2Geom = await loadObjFile("assets/pac2.obj", pacColor);
+		state.meshes["pac2"] = renderer.createMesh(pac2Geom);
+
+		const keyGeom = await loadObjFile("assets/key.obj", u8Color(201, 163, 85));
+		state.meshes["key"] = renderer.createMesh(keyGeom);
+
+		const lockGeom = await loadObjFile("assets/lock.obj", u8Color(0x66, 0x77, 0x88));
+		state.meshes["lock"] = renderer.createMesh(lockGeom);
+
+		const spookjeGeom = await loadObjFile("assets/spookje.obj", u8Color(255, 184, 221));
+		state.meshes["spookje"] = renderer.createMesh(spookjeGeom);
+
+		showTitle();
+	}); // map
 }
 
 on(window, "load", init);

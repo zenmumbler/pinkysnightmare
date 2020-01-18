@@ -8,7 +8,8 @@ export function show(sel: string | HTMLElement, disp?: string) { $(sel).forEach(
 export function hide(sel: string | HTMLElement) { $(sel).forEach(function(el) { el.style.display = "none"; }); }
 
 export function assert(cond: any, msg?: string): asserts cond {
-	if (!cond) {
+	if (! cond) {
+		alert(msg || "assertion failed");
 		throw new Error(msg || "assertion failed");
 	}
 }

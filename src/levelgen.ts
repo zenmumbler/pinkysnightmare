@@ -2,7 +2,8 @@
 // (c) 2015-6 by Arthur Langereis - @zenmumbler
 
 import { vec2, vec3, vec4 } from "stardazed/vector";
-import { u8Color, TriMesh, quickGeometry } from "./asset.js";
+import { u8Color, quickGeometry } from "./asset.js";
+import { RenderMesh, Renderer } from "./render";
 
 export const LEVEL_SCALE = 4.0;
 
@@ -14,11 +15,11 @@ export interface MapData {
 	path: boolean[];
 	gridW: number;
 	gridH: number;
-	mesh: TriMesh;
+	mesh: RenderMesh;
 	cornerColors: number[][];
 }
 
-function buildMapFromImageData(gl: WebGLRenderingContext, pix: ImageData): MapData {
+function buildMapFromImageData(renderer: Renderer, pix: ImageData): MapData {
 	const data = pix.data, pixw = pix.width, pixh = pix.height;
 	let inuse = 0, offset = 0, gridOffset = 0;
 
@@ -204,13 +205,13 @@ function buildMapFromImageData(gl: WebGLRenderingContext, pix: ImageData): MapDa
 		path,
 		gridW: pixw,
 		gridH: pixh,
-		mesh: new TriMesh(gl, geom),
+		mesh: renderer.createMesh(geom),
 		cornerColors
 	};
 }
 
 
-export function genMapMesh(gl: WebGLRenderingContext, then: (md: MapData) => void) {
+export function genMapMesh(renderer: Renderer, then: (md: MapData) => void) {
 	const img = new Image();
 	img.src = "assets/levelx_.png";
 	img.onload = function() {
@@ -227,7 +228,7 @@ export function genMapMesh(gl: WebGLRenderingContext, then: (md: MapData) => voi
 
 		ctx.drawImage(img, 0, 0);
 		const pix = ctx.getImageData(0, 0, cvs.width, cvs.height);
-		const map = buildMapFromImageData(gl, pix);
+		const map = buildMapFromImageData(renderer, pix);
 		const t1 = performance.now();
 
 		console.info("mapGen took", (t1 - t0), "ms");
