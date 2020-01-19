@@ -40,7 +40,7 @@ type GPUExtensionTextureFormat =
 	"s3tc-dxt1"; // not real, just a placeholder
 
 type GPUTextureFormatNonSpec =
-	"depth32float-stencil8"; // used in WebKit as af 2020-Jan
+	"depth32float-stencil8"; // used in WebKit as of 2020-Jan
 
 type GPUTextureFormat =
 	// 8-bit formats

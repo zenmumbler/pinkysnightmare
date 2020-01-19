@@ -169,10 +169,10 @@ class GLMesh {
 			gl.uniform1i(glProgram.textureUniform, 0);
 		}
 		if (this.giBuffer) {
-			gl.drawElements(gl.TRIANGLES, this.geometry.indexBuffer!.count, this.indexType, 0);
+			gl.drawElements(gl.TRIANGLES, this.geometry.indexBuffer!.length, this.indexType, 0);
 		}
 		else {
-			gl.drawArrays(gl.TRIANGLES, 0, this.geometry.vertexBuffers[0].capacity);
+			gl.drawArrays(gl.TRIANGLES, 0, this.geometry.vertexBuffers[0].length);
 		}
 
 		if (texture && glProgram.textureUniform) {
@@ -360,7 +360,7 @@ export class WebGPURenderer implements Renderer {
 		const ib = geom.indexBuffer;
 		const vertexBuffer = this.createBufferWithContents(vb.data, GPUBufferUsageFlags.VERTEX | GPUBufferUsageFlags.COPY_DST);
 		const indexBuffer = ib ? this.createBufferWithContents(ib.data, GPUBufferUsageFlags.INDEX | GPUBufferUsageFlags.COPY_DST) : undefined;
-		const indexFormat: GPUIndexFormat | undefined = ib ? (ib.elementType.byteSize === 2 ? "uint16" : "uint32") : undefined;
+		const indexFormat: GPUIndexFormat | undefined = ib ? (ib.elementType.byteLength === 2 ? "uint16" : "uint32") : undefined;
 
 		// create gpu buffer layout
 		const posField = vb.fieldByRole(VertexAttributeRole.Position)!;
@@ -440,10 +440,10 @@ export class WebGPURenderer implements Renderer {
 				}
 				pass.setBindGroup(0, bindGroup);
 				if (geom.indexBuffer) {
-					pass.drawIndexed(geom.indexBuffer.count, 1, 0, 0, 0);
+					pass.drawIndexed(geom.indexBuffer.length, 1, 0, 0, 0);
 				}
 				else {
-					pass.draw(geom.vertexBuffers[0].capacity, 1, 0, 0);
+					pass.draw(geom.vertexBuffers[0].length, 1, 0, 0);
 				}
 
 				// uniformBuffer.mapWriteAsync().then(data => {
