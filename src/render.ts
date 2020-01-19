@@ -2,6 +2,7 @@ import { UInt8 } from "stardazed/core";
 import { mat4 } from "stardazed/vector";
 import { Geometry, VertexAttributeRole } from "stardazed/geometry";
 import { assert } from "./util";
+import { loadImageData } from "./asset";
 
 export class RenderModel {
 	private meshes: RenderMesh[];
@@ -201,23 +202,19 @@ export class WebGLRenderer implements Renderer {
 	}
 
 	createTexture(fileName: string) {
-		return new Promise<RenderTexture>(resolve => {
+		return new Promise<RenderTexture>(async (resolve) => {
 			const gl = this.gl;
+			const imageData = await loadImageData(fileName);
 
 			const texture = gl.createTexture()!;
-			const image = new Image();
-			image.onload = function() {
-				gl.bindTexture(gl.TEXTURE_2D, texture);
-				// gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-				gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
-				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-				gl.bindTexture(gl.TEXTURE_2D, null);
-	
-				resolve({texture});
-			};
-	
-			image.src = fileName;
+			gl.bindTexture(gl.TEXTURE_2D, texture);
+			// gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+			gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, imageData);
+			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+			gl.bindTexture(gl.TEXTURE_2D, null);
+
+			resolve({texture});
 		});
 	}
 

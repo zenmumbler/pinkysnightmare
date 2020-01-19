@@ -31,3 +31,26 @@ export function quickGeometry(positions: NumArray, normals: NumArray, colours: N
 	if (uvs) { vb.fieldView(3).copyValuesFrom(uvs, vertexCount); }
 	return geom;
 }
+
+export function loadImage(fileName: string) {
+	return new Promise<HTMLImageElement>((resolve, reject) => {
+		const image = new Image();
+		image.onload = function() {
+			resolve(image);
+		};
+		image.onerror = function() {
+			reject(`Could not load image at ${fileName}`);
+		};
+		image.src = fileName;
+	});
+}
+
+export async function loadImageData(fileName: string) {
+	const image = await loadImage(fileName);
+	const canvas = document.createElement("canvas");
+	canvas.width = image.width;
+	canvas.height = image.height;
+	const ctx = canvas.getContext("2d")!;
+	ctx.drawImage(image, 0, 0);
+	return ctx.getImageData(0, 0, image.width, image.height);
+}
