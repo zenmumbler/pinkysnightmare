@@ -837,7 +837,7 @@ function showTitle() {
 }
 
 
-function init() {
+async function init() {
 	state = {
 		keys: [],
 		keyItems: [],
@@ -848,8 +848,8 @@ function init() {
 	} as any as State;
 
 	const canvas = document.querySelector("canvas")!;
-	renderer = new WebGLRenderer();
-	renderer.setup(canvas);
+	renderer = new WebGPURenderer();
+	await renderer.setup(canvas);
 	state.camera = new Camera(canvas);
 
 	state.modelProgram = renderer.createProgram("standard");
