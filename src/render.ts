@@ -6,7 +6,7 @@ import { loadImageData } from "./asset";
 
 export class RenderModel {
 	private meshes: RenderMesh[];
-	private texture: RenderTexture | undefined;
+	texture: RenderTexture | undefined;
 
 	private scaleMat = mat4.create();
 	private rotMat = mat4.create();
@@ -305,10 +305,294 @@ export class WebGLRenderer implements Renderer {
 }
 
 // ------- GPU
-/*
-export class WebGPURenderer implements Renderer {
-	setup(canvas: HTMLCanvasElement) {
 
+// class GPUMesh {
+// 	constructor(geom: Geometry) {
+
+// 	}
+// }
+
+export class WebGPURenderer implements Renderer {
+	device!: GPUDevice;
+	swapChain!: GPUSwapChain;
+	rpd!: GPURenderPassDescriptor;
+
+	async setup(canvas: HTMLCanvasElement) {
+		const adapter = await navigator.gpu.requestAdapter();
+		const device = await adapter.requestDevice();
+
+		const context = canvas.getContext("gpu")!;
+		const format = await (context.getSwapChainPreferredFormat ? context.getSwapChainPreferredFormat(device) : "bgra8unorm");
+
+		this.swapChain = context.configureSwapChain({
+			device,
+			format
+		});
+		this.device = device;
+
+		const depthTexture = device.createTexture({
+			size: {
+				width: canvas.width,
+				height: canvas.height,
+				depth: 1
+			},
+			arrayLayerCount: 1,
+			mipLevelCount: 1,
+			sampleCount: 1,
+			dimension: "2d",
+			format: "depth32float-stencil8",
+			usage: GPUTextureUsageFlags.OUTPUT_ATTACHMENT
+		});
+
+		this.rpd = { 
+			colorAttachments: [{
+				attachment: null as any as GPUTextureView, // filled in at rendertime
+				loadOp: "clear",
+				storeOp: "store",
+				clearColor: { r: 0.1, g: .0, b: .05, a: 1.0 }
+			}],
+			depthStencilAttachment: {
+				attachment: depthTexture.createDefaultView(),
+				depthLoadOp: "clear",
+				depthStoreOp: "store",
+				clearDepth: 1.0
+			}
+		};
+	}
+
+	createVertexState(geom: Geometry) {
+		const vb = geom.vertexBuffers[0];
+		const ib = geom.indexBuffer;
+		const vertexBuffer = this.createBufferWithContents(vb.data, GPUBufferUsageFlags.VERTEX | GPUBufferUsageFlags.COPY_DST);
+		const indexBuffer = ib ? this.createBufferWithContents(ib.data, GPUBufferUsageFlags.INDEX | GPUBufferUsageFlags.COPY_DST) : undefined;
+		const indexFormat: GPUIndexFormat | undefined = ib ? (ib.elementType.byteSize === 2 ? "uint16" : "uint32") : undefined;
+
+		// create gpu buffer layout
+		const posField = vb.fieldByRole(VertexAttributeRole.Position)!;
+		const colField = vb.fieldByRole(VertexAttributeRole.Colour)!;
+		// const texField = vb.fieldByRole(VertexAttributeRole.UV)!;
+		const vertexState: GPUVertexStateDescriptor = {
+			vertexBuffers: [
+				{
+					attributeSet: [
+						{
+							shaderLocation: 0,
+							offset: posField.byteOffset,
+							format: "float3" as GPUVertexFormat
+						},
+						{
+							shaderLocation: 1,
+							offset: colField.byteOffset,
+							format: "float3" as GPUVertexFormat
+						}
+					],
+					stride: vb.stride,
+					stepMode: vb.divisor === 0 ? "vertex" : "instance"
+				}
+			],
+			indexFormat
+		};
+
+		return {
+			vertexBuffer,
+			indexBuffer,
+			vertexState
+		};
+	}
+
+	createMesh(geom: Geometry): RenderMesh {
+		const { vertexBuffer, indexBuffer, vertexState } = this.createVertexState(geom);
+		const pipelines = new Map<GPUShaderModule, GPURenderPipeline>();
+		const renderer = this;
+		// const matrix = new Float32Array(1 * 16);
+		let uniformBuffer: GPUBuffer | undefined;
+		let bindGroup: GPUBindGroup | undefined;
+
+		return {
+			draw(modelViewMatrix: Float32Array, program: RenderProgram, texture?: RenderTexture) {
+				if (uniformBuffer === undefined) {
+					uniformBuffer = renderer.createBufferWithContents(modelViewMatrix, GPUBufferUsageFlags.UNIFORM | GPUBufferUsageFlags.MAP_WRITE);
+				}
+
+				const module = program.program.module as GPUShaderModule;
+				const bindGroupLayout = program.program.bindGroupLayout as GPUBindGroupLayout;
+				if (bindGroup === undefined) {
+					bindGroup = renderer.device.createBindGroup({
+						layout: bindGroupLayout,
+						bindings: [
+							{
+								binding: 0,
+								resource: { buffer: uniformBuffer, size: 16 * 4 }
+							}
+						]
+					});
+				}
+
+				let pipeline: GPURenderPipeline;
+				if (! pipelines.has(module)) {
+					pipeline = renderer.createPipeline(module, bindGroupLayout, vertexState);
+					pipelines.set(module, pipeline);
+				}
+				else {
+					pipeline = pipelines.get(module)!;
+				}
+
+				const pass = texture!.texture as GPURenderPassEncoder;
+				pass.setPipeline(pipeline);
+				pass.setVertexBuffers(0, [vertexBuffer], [0]);
+				if (indexBuffer) {
+					pass.setIndexBuffer(indexBuffer, 0);
+				}
+				pass.setBindGroup(0, bindGroup);
+				if (geom.indexBuffer) {
+					pass.drawIndexed(geom.indexBuffer.count, 1, 0, 0, 0);
+				}
+				else {
+					pass.draw(geom.vertexBuffers[0].capacity, 1, 0, 0);
+				}
+
+				// uniformBuffer.mapWriteAsync().then(data => {
+				// 	const dv = new Float32Array(data);
+				// 	dv.set(modelViewMatrix);
+				// 	uniformBuffer.unmap();
+				// });
+			}
+		};
+	}
+
+	createBufferWithContents(contents: TypedArray, usage: GPUBufferUsageFlags) {
+		const [buffer, arrayBuffer] = this.device.createBufferMapped({
+			size: contents.byteLength,
+			usage
+		});
+		const destView = new (contents.constructor as any)(arrayBuffer) as TypedArray;
+		destView.set(contents);
+		buffer.unmap();
+		return buffer;
+	}
+
+	async createTexture(fileName: string): Promise<RenderTexture> {
+		const { device } = this;
+
+		const imageData = await loadImageData(fileName);
+
+		const textureSize = {
+			width: imageData.width,
+			height: imageData.height,
+			depth: 1
+		};
+	
+		const texture = device.createTexture({
+			size: textureSize,
+			arrayLayerCount: 1,
+			mipLevelCount: 1,
+			sampleCount: 1,
+			dimension: "2d",
+			format: "rgba8unorm",
+			usage: GPUTextureUsageFlags.COPY_DST | GPUTextureUsageFlags.SAMPLED
+		});
+	
+		const textureDataBuffer = this.createBufferWithContents(imageData.data, GPUBufferUsageFlags.COPY_SRC);
+	
+		const dataCopyView = {
+			buffer: textureDataBuffer,
+			offset: 0,
+			rowPitch: imageData.width * 4,
+			imageHeight: 0
+		};
+		const textureCopyView = {
+			texture,
+			mipLevel: 0,
+			arrayLayer: 0,
+			origin: { x: 0, y: 0, z: 0 }
+		};
+		const blitCommandEncoder = device.createCommandEncoder();
+		blitCommandEncoder.copyBufferToTexture(dataCopyView, textureCopyView, textureSize);
+		device.getQueue().submit([blitCommandEncoder.finish()]);
+		
+		return { texture };
+	}
+
+	createPipeline(module: GPUShaderModule, bindGroupLayout: GPUBindGroupLayout, vertexInput: GPUVertexStateDescriptor) {
+		const pipelineLayout = this.device.createPipelineLayout({
+			bindGroupLayouts: [bindGroupLayout]
+		});
+		return this.device.createRenderPipeline({
+			layout: pipelineLayout,
+	
+			vertexStage: {
+				module,
+				entryPoint: "vertex_main"
+			},
+			fragmentStage: {
+				module,
+				entryPoint: "fragment_main"
+			},
+	
+			primitiveTopology: "triangle-list",
+			colorStates: [{
+				format: "bgra8unorm",
+				alphaBlend: {
+					srcFactor: "one",
+					dstFactor: "zero",
+					operation: "add"
+				},
+				colorBlend: {
+					srcFactor: "one",
+					dstFactor: "zero",
+					operation: "add"
+				},
+				writeMask: GPUColorWriteFlags.ALL
+			}],
+			depthStencilState: {
+				depthWriteEnabled: true,
+				depthCompare: "less",
+				format: "depth32float-stencil8" /* AL added */
+			},
+			vertexInput
+		});
+	}
+
+	createProgram(name: string): RenderProgram {
+		const shaderScript = document.getElementById(`${name}GPU`) as HTMLScriptElement;
+		assert(shaderScript, "no such shader: " + name);
+
+		const module = this.device.createShaderModule({
+			code: shaderScript.textContent || "",
+			isWHLSL: true
+		});
+		const bindGroupLayout = this.device.createBindGroupLayout({ 
+			bindings: [{
+				binding: 0,
+				visibility: GPUShaderStageFlags.VERTEX,
+				type: "uniform-buffer"
+			}] 
+		});
+
+		return { program: { module, bindGroupLayout } };
+	}
+
+	createModel(meshes: RenderMesh[], texture?: RenderTexture): RenderModel {
+		return new RenderModel(meshes, texture);
+	}
+
+	createPass(projMatrix: Float32Array, viewMatrix: Float32Array): RenderPass {
+		const encoder = this.device.createCommandEncoder();
+		const rpd = this.rpd;
+		rpd.colorAttachments[0].attachment = this.swapChain.getCurrentTexture().createDefaultView();
+		const pass = encoder.beginRenderPass(rpd);
+		const pv = mat4.multiply(new Float32Array(16), projMatrix, viewMatrix);
+
+		const renderer = this;
+		return {
+			draw(cmd: RenderCommand) {
+				cmd.model.texture = { texture: pass };
+				cmd.model.draw(pv, cmd.program, cmd.meshIndex || 0);
+			},
+			finish() {
+				pass.endPass();
+				renderer.device.getQueue().submit([encoder.finish()]);
+			}
+		};
 	}
 }
-*/
