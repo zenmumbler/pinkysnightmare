@@ -33,13 +33,14 @@ interface State {
 
 let state: State;
 let renderer: Renderer;
+let bird = false;
 
 let active = true, mode = "title";
 
 const KEY_UP = 38, KEY_DOWN = 40, KEY_LEFT = 37, KEY_RIGHT = 39,
 	// KEY_SPACE = 32, KEY_RETURN = 13,
-	KEY_W = "W".charCodeAt(0), KEY_A = "A".charCodeAt(0), KEY_S = "S".charCodeAt(0), KEY_D = "D".charCodeAt(0);
-	// KEY_K = 'K'.charCodeAt(0);
+	KEY_W = "W".charCodeAt(0), KEY_A = "A".charCodeAt(0), KEY_S = "S".charCodeAt(0), KEY_D = "D".charCodeAt(0),
+	KEY_B = "B".charCodeAt(0);
 
 
 function intRandom(choices: number) {
@@ -61,8 +62,12 @@ class Camera {
 		const h = canvas.height;
 
 		this.projectionMatrix = mat4.create();
-		mat4.perspective(this.projectionMatrix, deg2rad(65), w / h, 0.05, 100.0);
-		// mat4.perspective(this.projectionMatrix, deg2rad(65), w / h, 1, 400.0);
+		if (bird) {
+			mat4.perspective(this.projectionMatrix, deg2rad(65), w / h, 1, 400.0);
+		}
+		else {
+			mat4.perspective(this.projectionMatrix, deg2rad(65), w / h, 0.05, 100.0);
+		}
 		this.viewMatrix = mat4.create();
 	}
 
@@ -119,8 +124,12 @@ class Camera {
 		}
 		vec3.scale(playerPos, playerPos, LEVEL_SCALE);
 
-		mat4.lookAt(this.viewMatrix, camPos, playerPos, [0, 1, 0]);
-		// mat4.lookAt(this.viewMatrix, [114, 250, 130], [114, 0, 130], [0, 0, 1]);
+		if (bird) {
+			mat4.lookAt(this.viewMatrix, [114, 250, 130], [114, 0, 130], [0, 0, 1]);
+		}
+		else {
+			mat4.lookAt(this.viewMatrix, camPos, playerPos, [0, 1, 0]);
+		}
 	}
 }
 
@@ -849,6 +858,9 @@ function init() {
 	window.onkeydown = function(evt: KeyboardEvent) {
 		const kc = evt.keyCode;
 		state.keys[kc] = true;
+		if (kc === KEY_B) {
+			bird = !bird;
+		}
 		if (! evt.metaKey) {
 			evt.preventDefault();
 		}
