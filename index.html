@@ -59,6 +59,56 @@
 
 <script src="build/pinkydream.js"></script>
 
+<script id="standardGPU" type="x-shader/x-webgpu">
+	struct FragmentData {
+		float4 position : SV_Position;
+		float3 colour : attribute(1);
+	}
+	
+	vertex FragmentData vertex_main(
+		float3 position : attribute(0), 
+		float3 colour : attribute(1), 
+		constant float4x4[] mvpMatrix : register(b0))
+	{
+		FragmentData out;
+		out.position = mul(mvpMatrix[0], float4(position, 1.0));
+		out.colour = colour;
+		return out;
+	}
+	
+	fragment float4 fragment_main(
+		float3 colour : attribute(1)
+	) : SV_Target 0
+	{
+		return float4(colour, 1.0);
+	}	
+</script>
+
+<script id="texturedGPU" type="x-shader/x-webgpu">
+	struct FragmentData {
+		float4 position : SV_Position;
+		float3 colour : attribute(1);
+	}
+	
+	vertex FragmentData vertex_main(
+		float3 position : attribute(0), 
+		float3 colour : attribute(1), 
+		constant float4x4[] mvpMatrix : register(b0))
+	{
+		FragmentData out;
+		out.position = mul(mvpMatrix[0], float4(position, 1.0));
+		out.colour = colour;
+		return out;
+	}
+	
+	fragment float4 fragment_main(
+		float3 colour : attribute(1)
+	) : SV_Target 0
+	{
+		return float4(colour, 1.0);
+	}	
+</script>
+
 <script id="standardVert" type="x-shader/x-vertex">
 	attribute vec3 vertexPos_model;
 	attribute vec3 vertexColor;

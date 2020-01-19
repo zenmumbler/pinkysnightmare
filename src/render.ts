@@ -196,6 +196,7 @@ export class WebGLRenderer implements Renderer {
 
 		this.gl.clearColor(0.1, 0.0, 0.05, 1.0);
 		this.gl.enable(this.gl.DEPTH_TEST);
+
 		const w = canvas.width;
 		const h = canvas.height;
 		this.gl.viewport(0, 0, w, h);
@@ -305,12 +306,6 @@ export class WebGLRenderer implements Renderer {
 }
 
 // ------- GPU
-
-// class GPUMesh {
-// 	constructor(geom: Geometry) {
-
-// 	}
-// }
 
 export class WebGPURenderer implements Renderer {
 	device!: GPUDevice;
