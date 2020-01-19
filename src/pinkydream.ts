@@ -666,7 +666,8 @@ class Abomination {
 	pathPos: NumArray;
 
 	static spawnData: { direction: Direction, pathPos: number[] }[] = [
-		{ direction: "north", pathPos: [43, 18] },
+		// { direction: "north", pathPos: [43, 18] },
+		{ direction: "west", pathPos: [26, 24] },
 		{ direction: "west", pathPos: [13, 4] },
 		{ direction: "south", pathPos: [4, 43] },
 		{ direction: "north", pathPos: [49, 52] },
