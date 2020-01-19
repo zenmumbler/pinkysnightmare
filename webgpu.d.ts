@@ -39,6 +39,9 @@ type GPUExtent3D = number[] | {
 type GPUExtensionTextureFormat =
 	"s3tc-dxt1"; // not real, just a placeholder
 
+type GPUTextureFormatNonSpec =
+	"depth32float-stencil8"; // used in WebKit as af 2020-Jan
+
 type GPUTextureFormat =
 	// 8-bit formats
 	"r8unorm" |
@@ -85,7 +88,8 @@ type GPUTextureFormat =
 	"depth32float" |
 	"depth24plus" |
 	"depth24plus-stencil8" |
-	GPUExtensionTextureFormat;
+	GPUExtensionTextureFormat |
+	GPUTextureFormatNonSpec;
 
 
 declare const enum GPUBufferUsageFlags {
@@ -137,6 +141,8 @@ interface GPUTextureDescriptor extends GPUObjectDescriptorBase {
 
 interface GPUTexture extends GPUObjectBase {
 	createView(descriptor?: GPUTextureViewDescriptor): GPUTextureView;
+	// in impl
+	createDefaultView(): GPUTextureView;
 	destroy(): void;
 }
 
@@ -377,8 +383,14 @@ interface GPUVertexAttributeDescriptor {
 }
 
 interface GPUVertexBufferLayoutDescriptor {
-	arrayStride: number;
-	attributes: GPUVertexAttributeDescriptor[];
+	// in spec
+	arrayStride?: number;
+	// in impl
+	stride?: number;
+	// in spec
+	attributes?: GPUVertexAttributeDescriptor[];
+	// in impl
+	attributeSet?: GPUVertexAttributeDescriptor[];
 	stepMode?: GPUInputStepMode;
 }
 
@@ -390,14 +402,17 @@ interface GPUVertexStateDescriptor {
 
 type GPUPrimitiveTopology = "point-list" | "line-list" | "line-strip" | "triangle-list" | "triangle-strip";
 
-interface GPURenderPipelineDescriptor extends GPUObjectDescriptorBase {
+interface GPURenderPipelineDescriptor extends GPUPipelineDescriptorBase {
 	vertexStage: GPUProgrammableStageDescriptor;
 	fragmentStage?: GPUProgrammableStageDescriptor;
 	primitiveTopology: GPUPrimitiveTopology;
 	rasterizationState?: GPURasterizationStateDescriptor;
 	colorStates?: GPUColorStateDescriptor[];
 	depthStencilState?: GPUDepthStencilStateDescriptor;
-	vetexState?: GPUVertexStateDescriptor;
+	// in spec
+	vertexState?: GPUVertexStateDescriptor;
+	// in impl
+	vertexInput?: GPUVertexStateDescriptor;
 	sampleCount?: number;
 	sampleMask?: number;
 	alphaToCoverageEnabled?: boolean;
@@ -466,6 +481,8 @@ interface GPURenderEncodeBase {
 
 	setIndexBuffer(buffer: GPUBuffer, offset?: GPUBufferSize): void;
 	setVertexBuffer(slot: number, buffer: GPUBuffer, offset?: GPUBufferSize): void;
+	// in impl
+	setVertexBuffers(unknown: number, buffers: GPUBuffer[], offsets: number[]): void;
 
 	draw(vertexCount: number, instanceCount: number, firstVertex: number, firstInstance: number): void;
 	drawIndexed(indexCount: number, instanceCount: number, firstIndex: number, baseVertex: number, firstInstance: number): void;
@@ -482,18 +499,31 @@ interface GPURenderPassColorAttachmentDescriptor {
 	attachment: GPUTextureView;
 	resolveTarget?: GPUTextureView;
 
-	loadValue: GPULoadOp | GPUColor;
+	// in spec
+	loadValue?: GPULoadOp | GPUColor;
+	// in impl
+	loadOp?: "load" | "clear";
+	// in impl
+	clearColor?: GPUColor;
+
 	storeOp?: GPUStoreOp;
 }
 
 interface GPURenderPassDepthStencilAttachmentDescriptor {
 	attachment: GPUTextureView;
 
-	depthLoadValue: GPULoadOp | number;
+	// in spec
+	depthLoadValue?: GPULoadOp | number;
+	// in impl
+	depthLoadOp?: "load" | "clear";
+	// in impl
+	clearDepth?: number;
 	depthStoreOp: GPUStoreOp;
 
-	stencilLoadValue: GPULoadOp | number;
-	stencilStoreOp: GPUStoreOp;
+	// mandatory in spec, optional in impl
+	stencilLoadValue?: GPULoadOp | number;
+	// mandatory in spec, optional in impl
+	stencilStoreOp?: GPUStoreOp;
 }
 
 interface GPURenderPassDescriptor extends GPUObjectDescriptorBase {
