@@ -34,7 +34,7 @@ interface State {
 	mapModel: RenderModel;
 	modelProgram: RenderProgram;
 	texturedProgram: RenderProgram;
-	// cornerColors: number[][];
+	fogLimits: Float32Array
 }
 
 let state: State;
@@ -44,9 +44,7 @@ let bird = false;
 let active = true, mode = "title";
 
 const KEY_UP = 38, KEY_DOWN = 40, KEY_LEFT = 37, KEY_RIGHT = 39,
-	// KEY_SPACE = 32, KEY_RETURN = 13,
-	KEY_W = "W".charCodeAt(0), KEY_A = "A".charCodeAt(0), KEY_S = "S".charCodeAt(0), KEY_D = "D".charCodeAt(0),
-	KEY_B = "B".charCodeAt(0);
+	KEY_W = "W".charCodeAt(0), KEY_A = "A".charCodeAt(0), KEY_S = "S".charCodeAt(0), KEY_D = "D".charCodeAt(0);
 
 
 class Camera {
@@ -60,10 +58,14 @@ class Camera {
 
 		this.projectionMatrix = mat4.create();
 		if (bird) {
-			mat4.perspective(this.projectionMatrix, deg2rad(65), w / h, 1, 400.0);
+			mat4.perspective(this.projectionMatrix, deg2rad(65), w / h, 1, 100.0);
+			state.fogLimits[0] = 100.0;
+			state.fogLimits[1] = 1000.0;
 		}
 		else {
-			mat4.perspective(this.projectionMatrix, deg2rad(65), w / h, 0.05, 100.0);
+			mat4.perspective(this.projectionMatrix, deg2rad(65), w / h, 0.05, 25.0);
+			state.fogLimits[0] = 2.0;
+			state.fogLimits[1] = 8.0;
 		}
 		this.viewMatrix = mat4.create();
 	}
@@ -120,7 +122,7 @@ class Camera {
 		}
 
 		if (bird) {
-			mat4.lookAt(this.viewMatrix, [114, 250, 130], [114, 0, 130], [0, 0, 1]);
+			mat4.lookAt(this.viewMatrix, [28.5, 60, 32.5], [28.5, 0, 32.5], [0, 0, 1]);
 		}
 		else {
 			mat4.lookAt(this.viewMatrix, camPos, playerPos, [0, 1, 0]);
@@ -715,7 +717,7 @@ class Abomination {
 
 
 function drawScene(camera: Camera) {
-	const pass = renderer.createPass(camera.projectionMatrix, camera.viewMatrix);
+	const pass = renderer.createPass(camera.projectionMatrix, camera.viewMatrix, state.fogLimits);
 
 	// -- PLAIN MODELS
 	pass.draw({ model: state.mapModel, program: state.modelProgram });
@@ -796,7 +798,8 @@ async function init() {
 		keyItems: [],
 		textures: {},
 		meshes: {},
-		pacs: []
+		pacs: [],
+		fogLimits: new Float32Array(2)
 	} as any as State;
 
 	const canvas = document.querySelector("canvas")!;
@@ -810,9 +813,6 @@ async function init() {
 	window.onkeydown = function(evt: KeyboardEvent) {
 		const kc = evt.keyCode;
 		state.keys[kc] = true;
-		if (kc === KEY_B) {
-			bird = !bird;
-		}
 		if (! evt.metaKey) {
 			evt.preventDefault();
 		}

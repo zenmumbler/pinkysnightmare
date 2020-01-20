@@ -74,7 +74,7 @@ export interface Renderer {
 	createProgram(name: string): RenderProgram;
 	createModel(meshes: RenderMesh[], texture?: RenderTexture): RenderModel;
 
-	createPass(projMatrix: Float32Array, viewMatrix: Float32Array): RenderPass;
+	createPass(projMatrix: Float32Array, viewMatrix: Float32Array, fogLimits: Float32List): RenderPass;
 }
 
 // ------- GL
@@ -87,6 +87,7 @@ type StandardProgram = WebGLProgram & {
 	projMatrixUniform: WebGLUniformLocation | null;
 	mvMatrixUniform: WebGLUniformLocation | null;
 	textureUniform: WebGLUniformLocation | null;
+	fogLimitsUniform: WebGLUniformLocation | null;
 };
 
 class GLMesh {
@@ -191,7 +192,7 @@ export class WebGLRenderer implements Renderer {
 			this.gl = canvas.getContext("webgl")!;
 		} catch (e) {
 		}
-	
+
 		assert(this.gl, "Could not initialise WebGL");
 
 		this.gl.clearColor(0.1, 0.0, 0.05, 1.0);
@@ -223,7 +224,7 @@ export class WebGLRenderer implements Renderer {
 		const gl = this.gl;
 		const shaderScript = document.getElementById(id) as HTMLScriptElement;
 		assert(shaderScript, "no such shader: " + id);
-	
+
 		let shader: WebGLShader;
 		if (shaderScript.type === "x-shader/x-fragment") {
 			shader = gl.createShader(gl.FRAGMENT_SHADER)!;
@@ -232,14 +233,14 @@ export class WebGLRenderer implements Renderer {
 		} else {
 			assert(false, id + " does not seem to be a shader");
 		}
-	
+
 		gl.shaderSource(shader, shaderScript.textContent || "");
 		gl.compileShader(shader);
-	
+
 		if (! gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
 			assert(false, gl.getShaderInfoLog(shader) || "bad shader");
 		}
-	
+
 		return shader;
 	}
 
@@ -250,23 +251,24 @@ export class WebGLRenderer implements Renderer {
 		gl.attachShader(program, this.createShader(`${name}Vert`));
 		gl.attachShader(program, this.createShader(`${name}Frag`));
 		gl.linkProgram(program);
-	
+
 		if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
 			alert("Could not initialise shaders");
 		}
-	
+
 		gl.useProgram(program);
-	
+
 		program.vertexPositionAttribute = gl.getAttribLocation(program, "vertexPos_model");
 		program.vertexColorAttribute = gl.getAttribLocation(program, "vertexColor");
 		program.vertexUVAttribute = gl.getAttribLocation(program, "vertexUV");
-	
+
 		program.projMatrixUniform = gl.getUniformLocation(program, "projectionMatrix");
 		program.mvMatrixUniform = gl.getUniformLocation(program, "modelViewMatrix");
 		program.textureUniform = gl.getUniformLocation(program, "diffuseSampler");
-	
+		program.fogLimitsUniform = gl.getUniformLocation(program, "fogLimits");
+
 		gl.useProgram(null);
-	
+
 		return {program};
 	}
 
@@ -278,7 +280,7 @@ export class WebGLRenderer implements Renderer {
 		return new RenderModel(meshes, texture);
 	}
 
-	createPass(projMatrix: Float32Array, viewMatrix: Float32Array) {
+	createPass(projMatrix: Float32Array, viewMatrix: Float32Array, fogLimits: Float32List) {
 		const gl = this.gl;
 		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 		const cmds = new Map<RenderProgram, RenderCommand[]>();
@@ -295,6 +297,7 @@ export class WebGLRenderer implements Renderer {
 					const glProgram = program.program as StandardProgram;
 					gl.useProgram(glProgram);
 					gl.uniformMatrix4fv(glProgram.projMatrixUniform, false, projMatrix);
+					gl.uniform2fv(glProgram.fogLimitsUniform, fogLimits);
 					for (const cmd of cmdList) {
 						cmd.model.draw(viewMatrix, program, cmd.meshIndex || 0);
 					}
@@ -339,7 +342,7 @@ export class WebGPURenderer implements Renderer {
 			usage: GPUTextureUsageFlags.OUTPUT_ATTACHMENT
 		});
 
-		this.rpd = { 
+		this.rpd = {
 			colorAttachments: [{
 				attachment: null as any as GPUTextureView, // filled in at rendertime
 				loadOp: "clear",
@@ -476,7 +479,7 @@ export class WebGPURenderer implements Renderer {
 			height: imageData.height,
 			depth: 1
 		};
-	
+
 		const texture = device.createTexture({
 			size: textureSize,
 			arrayLayerCount: 1,
@@ -486,9 +489,9 @@ export class WebGPURenderer implements Renderer {
 			format: "rgba8unorm",
 			usage: GPUTextureUsageFlags.COPY_DST | GPUTextureUsageFlags.SAMPLED
 		});
-	
+
 		const textureDataBuffer = this.createBufferWithContents(imageData.data, GPUBufferUsageFlags.COPY_SRC);
-	
+
 		const dataCopyView = {
 			buffer: textureDataBuffer,
 			offset: 0,
@@ -504,7 +507,7 @@ export class WebGPURenderer implements Renderer {
 		const blitCommandEncoder = device.createCommandEncoder();
 		blitCommandEncoder.copyBufferToTexture(dataCopyView, textureCopyView, textureSize);
 		device.getQueue().submit([blitCommandEncoder.finish()]);
-		
+
 		return { texture };
 	}
 
@@ -514,7 +517,7 @@ export class WebGPURenderer implements Renderer {
 		});
 		return this.device.createRenderPipeline({
 			layout: pipelineLayout,
-	
+
 			vertexStage: {
 				module,
 				entryPoint: "vertex_main"
@@ -523,7 +526,7 @@ export class WebGPURenderer implements Renderer {
 				module,
 				entryPoint: "fragment_main"
 			},
-	
+
 			primitiveTopology: "triangle-list",
 			colorStates: [{
 				format: "bgra8unorm",
@@ -556,12 +559,12 @@ export class WebGPURenderer implements Renderer {
 			code: shaderScript.textContent || "",
 			isWHLSL: true
 		});
-		const bindGroupLayout = this.device.createBindGroupLayout({ 
+		const bindGroupLayout = this.device.createBindGroupLayout({
 			bindings: [{
 				binding: 0,
 				visibility: GPUShaderStageFlags.VERTEX,
 				type: "uniform-buffer"
-			}] 
+			}]
 		});
 
 		return { program: { module, bindGroupLayout } };
@@ -571,7 +574,7 @@ export class WebGPURenderer implements Renderer {
 		return new RenderModel(meshes, texture);
 	}
 
-	createPass(projMatrix: Float32Array, viewMatrix: Float32Array): RenderPass {
+	createPass(projMatrix: Float32Array, viewMatrix: Float32Array, _fogLimits: Float32List): RenderPass {
 		const encoder = this.device.createCommandEncoder();
 		const rpd = this.rpd;
 		rpd.colorAttachments[0].attachment = this.swapChain.getCurrentTexture().createDefaultView();
