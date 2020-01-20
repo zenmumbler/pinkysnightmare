@@ -2,10 +2,11 @@
 // An entry for LD33 Game Jampo — You are the Monster
 // (c) 2015-2020 by Arthur Langereis — @zenmumbler
 
+import { deg2rad } from "stardazed/core";
 import { vec2, vec3, mat2, mat4 } from "stardazed/vector";
 import { $1, on, show, hide, assert } from "./util.js";
 import { u8Color, quickGeometry } from "./asset.js";
-import { Renderer, RenderTexture, RenderMesh, RenderModel, WebGPURenderer, RenderProgram, RenderPass } from "./render";
+import { Renderer, RenderTexture, RenderMesh, RenderModel, WebGLRenderer, RenderProgram, RenderPass } from "./render";
 import { LEVEL_SCALE, genMapMesh, CameraPoint } from "./levelgen.js";
 import { loadObjFile } from "./objloader.js";
 
@@ -46,11 +47,6 @@ const KEY_UP = 38, KEY_DOWN = 40, KEY_LEFT = 37, KEY_RIGHT = 39,
 function intRandom(choices: number) {
 	return (Math.random() * choices) | 0;
 }
-
-function deg2rad(deg: number) {
-	return deg * 3.14159265358979323846 / 180.0;
-}
-
 
 class Camera {
 	projectionMatrix: Float32Array;
@@ -844,12 +840,11 @@ async function init() {
 		keyItems: [],
 		textures: {},
 		meshes: {},
-		// models: {},
 		pacs: []
 	} as any as State;
 
 	const canvas = document.querySelector("canvas")!;
-	renderer = new WebGPURenderer();
+	renderer = new WebGLRenderer();
 	await renderer.setup(canvas);
 	state.camera = new Camera(canvas);
 
