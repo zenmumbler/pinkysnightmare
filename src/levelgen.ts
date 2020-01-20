@@ -2,7 +2,7 @@
 // (c) 2015-6 by Arthur Langereis - @zenmumbler
 
 import { vec2, vec3, vec4 } from "stardazed/vector";
-import { u8Color, quickGeometry } from "./asset.js";
+import { u8Color, quickGeometry, loadImageData } from "./asset.js";
 import { RenderMesh, Renderer } from "./render";
 
 export const LEVEL_SCALE = 4.0;
@@ -211,28 +211,11 @@ function buildMapFromImageData(renderer: Renderer, pix: ImageData): MapData {
 }
 
 
-export function genMapMesh(renderer: Renderer, then: (md: MapData) => void) {
-	const img = new Image();
-	img.src = "assets/levelx_.png";
-	img.onload = function() {
-		const t0 = performance.now();
-		const cvs = document.createElement("canvas");
-		cvs.width = img.width;
-		cvs.height = img.height;
-
-		const ctx = cvs.getContext("2d")!;
-		(ctx as any).webkitImageSmoothingEnabled = false; // NO
-		(ctx as any).mozImageSmoothingEnabled = false;
-		(ctx as any).msImageSmoothingEnabled = false;
-		ctx.imageSmoothingEnabled = false;
-
-		ctx.drawImage(img, 0, 0);
-		const pix = ctx.getImageData(0, 0, cvs.width, cvs.height);
-		const map = buildMapFromImageData(renderer, pix);
-		const t1 = performance.now();
-
-		console.info("mapGen took", (t1 - t0), "ms");
-
-		then(map);
-	};
+export async function genMapMesh(renderer: Renderer) {
+	const pix = await loadImageData("assets/levelx_.png");
+	const t0 = performance.now();
+	const map = buildMapFromImageData(renderer, pix);
+	const t1 = performance.now();
+	console.info("mapGen took", (t1 - t0), "ms");
+	return map;
 }

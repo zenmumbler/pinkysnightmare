@@ -2,23 +2,24 @@
 // An entry for LD33 Game Jampo — You are the Monster
 // (c) 2015-2020 by Arthur Langereis — @zenmumbler
 
-import { deg2rad } from "stardazed/core";
+import { deg2rad, intRandom } from "stardazed/core";
 import { vec2, vec3, mat2, mat4 } from "stardazed/vector";
 import { $1, on, show, hide, assert } from "./util.js";
-import { u8Color, quickGeometry } from "./asset.js";
+import { u8Color, makeDoorGeometry } from "./asset.js";
 import { Renderer, RenderTexture, RenderMesh, RenderModel, WebGLRenderer, RenderProgram, RenderPass } from "./render";
 import { LEVEL_SCALE, genMapMesh, CameraPoint } from "./levelgen.js";
 import { loadObjFile } from "./objloader.js";
 
 interface State {
+	// timing
 	t0: number;
 	tCur: number;
 	tLast: number;
 
+	// input
 	keys: boolean[];
-	meshes: Record<string, RenderMesh>;
-	textures: Record<string, RenderTexture>;
-	mapModel: RenderModel;
+
+	// entities
 	keyItems: Key[];
 	pacs: Abomination[];
 	player: Player;
@@ -27,9 +28,13 @@ interface State {
 	end: End;
 	camera: Camera;
 
+	// assets and render stuff
+	meshes: Record<string, RenderMesh>;
+	textures: Record<string, RenderTexture>;
+	mapModel: RenderModel;
 	modelProgram: RenderProgram;
 	texturedProgram: RenderProgram;
-	cornerColors: number[][];
+	// cornerColors: number[][];
 }
 
 let state: State;
@@ -43,10 +48,6 @@ const KEY_UP = 38, KEY_DOWN = 40, KEY_LEFT = 37, KEY_RIGHT = 39,
 	KEY_W = "W".charCodeAt(0), KEY_A = "A".charCodeAt(0), KEY_S = "S".charCodeAt(0), KEY_D = "D".charCodeAt(0),
 	KEY_B = "B".charCodeAt(0);
 
-
-function intRandom(choices: number) {
-	return (Math.random() * choices) | 0;
-}
 
 class Camera {
 	projectionMatrix: Float32Array;
@@ -423,41 +424,6 @@ class Key {
 }
 
 
-function makeDoorMesh(cornerColors: number[][]) {
-	const vertexes: number[] = [], normals: number[] = [], colors: number[] = [], uvs = [];
-
-	const xa = -1.5, xb = 1.5,
-		h = 3,
-		za = 0, zb = .5;
-
-	function vtx(x: number, y: number, z: number) { vertexes.push(x, y, z); }
-	function col(c: number[]) { colors.push(c[0], c[1], c[2]); }
-	function nrm6(nrm: number[]) { for (let n = 0; n < 6; ++n) { normals.push(nrm[0], nrm[1], nrm[2]); } }
-
-	vtx(xb, h, za); col(cornerColors[0]); uvs.push(0, 0);
-	vtx(xb, 0, za); col(cornerColors[2]); uvs.push(0, 1);
-	vtx(xa, 0, za); col(cornerColors[3]); uvs.push(1, 1);
-
-	vtx(xa, 0, za); col(cornerColors[3]); uvs.push(1, 1);
-	vtx(xa, h, za); col(cornerColors[1]); uvs.push(1, 0);
-	vtx(xb, h, za); col(cornerColors[0]); uvs.push(0, 0);
-
-	nrm6([0, 0, -1]);
-
-	vtx(xb, h, zb); col(cornerColors[4]); uvs.push(0, 0);
-	vtx(xb, h, za); col(cornerColors[4]); uvs.push(0, 0);
-	vtx(xa, h, za); col(cornerColors[4]); uvs.push(0, 0);
-
-	vtx(xa, h, za); col(cornerColors[4]); uvs.push(0, 0);
-	vtx(xa, h, zb); col(cornerColors[4]); uvs.push(0, 0);
-	vtx(xb, h, zb); col(cornerColors[4]); uvs.push(0, 0);
-
-	nrm6([0, 1, 0]);
-
-	return renderer.createMesh(quickGeometry(vertexes, normals, colors, uvs));
-}
-
-
 class Door {
 	mesh: RenderMesh;
 	model: RenderModel;
@@ -466,7 +432,7 @@ class Door {
 	openT0 = 0;
 
 	constructor() {
-		this.mesh = makeDoorMesh(state.cornerColors);
+		this.mesh = state.meshes.door;
 		this.model = renderer.createModel([this.mesh], state.textures["door"]);
 
 		this.state = "closed";
@@ -887,11 +853,12 @@ async function init() {
 		location.reload();
 	});
 
-	genMapMesh(renderer, async function(mapData) {
+	genMapMesh(renderer).then(async function(mapData) {
 		state.mapModel = renderer.createModel([mapData.mesh]);
 		state.camera.fixedPoints = mapData.cameras;
 		state.grid = new Grid(mapData.gridW, mapData.gridH, mapData.grid, mapData.path);
-		state.cornerColors = mapData.cornerColors;
+
+		state.meshes["door"] = renderer.createMesh(makeDoorGeometry(mapData.cornerColors));
 
 		const pacColor = u8Color(213, 215, 17);
 
@@ -914,7 +881,7 @@ async function init() {
 		state.meshes["spookje"] = renderer.createMesh(spookjeGeom);
 
 		showTitle();
-	}); // map
+	});
 }
 
 on(window, "load", init);

@@ -32,6 +32,40 @@ export function quickGeometry(positions: NumArray, normals: NumArray, colours: N
 	return geom;
 }
 
+export function makeDoorGeometry(cornerColors: number[][]) {
+	const vertexes: number[] = [], normals: number[] = [], colors: number[] = [], uvs = [];
+
+	const xa = -1.5, xb = 1.5,
+		h = 3,
+		za = 0, zb = .5;
+
+	function vtx(x: number, y: number, z: number) { vertexes.push(x, y, z); }
+	function col(c: number) { colors.push(cornerColors[c][0], cornerColors[c][1], cornerColors[c][2]); }
+	function nrm6(nrm: number[]) { for (let n = 0; n < 6; ++n) { normals.push(nrm[0], nrm[1], nrm[2]); } }
+
+	vtx(xb, h, za); col(0); uvs.push(0, 0);
+	vtx(xb, 0, za); col(2); uvs.push(0, 1);
+	vtx(xa, 0, za); col(3); uvs.push(1, 1);
+
+	vtx(xa, 0, za); col(3); uvs.push(1, 1);
+	vtx(xa, h, za); col(1); uvs.push(1, 0);
+	vtx(xb, h, za); col(0); uvs.push(0, 0);
+
+	nrm6([0, 0, -1]);
+
+	vtx(xb, h, zb); col(4); uvs.push(0, 0);
+	vtx(xb, h, za); col(4); uvs.push(0, 0);
+	vtx(xa, h, za); col(4); uvs.push(0, 0);
+
+	vtx(xa, h, za); col(4); uvs.push(0, 0);
+	vtx(xa, h, zb); col(4); uvs.push(0, 0);
+	vtx(xb, h, zb); col(4); uvs.push(0, 0);
+
+	nrm6([0, 1, 0]);
+
+	return quickGeometry(vertexes, normals, colors, uvs);
+}
+
 export function loadImage(fileName: string) {
 	return new Promise<HTMLImageElement>((resolve, reject) => {
 		const image = new Image();
@@ -51,6 +85,10 @@ export async function loadImageData(fileName: string) {
 	canvas.width = image.width;
 	canvas.height = image.height;
 	const ctx = canvas.getContext("2d")!;
+	(ctx as any).webkitImageSmoothingEnabled = false;
+	(ctx as any).mozImageSmoothingEnabled = false;
+	(ctx as any).msImageSmoothingEnabled = false;
+	ctx.imageSmoothingEnabled = false;
 	ctx.drawImage(image, 0, 0);
 	return ctx.getImageData(0, 0, image.width, image.height);
 }
