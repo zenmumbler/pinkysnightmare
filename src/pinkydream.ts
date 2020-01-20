@@ -2,12 +2,12 @@
 // An entry for LD33 Game Jampo — You are the Monster
 // (c) 2015-2020 by Arthur Langereis — @zenmumbler
 
-import { deg2rad, intRandom } from "stardazed/core";
+import { deg2rad, intRandom, clamp01f } from "stardazed/core";
 import { vec2, vec3, mat2, mat4 } from "stardazed/vector";
 import { $1, on, show, hide, assert } from "./util.js";
 import { u8Color, makeDoorGeometry } from "./asset.js";
 import { Renderer, RenderTexture, RenderMesh, RenderModel, WebGLRenderer, RenderProgram, RenderPass } from "./render";
-import { LEVEL_SCALE, genMapMesh, CameraPoint } from "./levelgen.js";
+import { genMapMesh, CameraPoint } from "./levelgen.js";
 import { loadObjFile } from "./objloader.js";
 
 interface State {
@@ -110,7 +110,6 @@ class Camera {
 		// place eye at worldspace of cam and treat the viewpoint looking at the home door as a fixed camera
 		const camY = bestCam.doorCam ? 6 : 5;
 		const camPos = vec3.fromValues(bestCam[0], camY, bestCam[1]);
-		vec3.scale(camPos, camPos, LEVEL_SCALE);
 
 		const playerPos = vec3.clone(state.player.position);
 		if (bestCam.doorCam) {
@@ -119,7 +118,6 @@ class Camera {
 		else {
 			playerPos[1] = 0.3; // player height oscillates but we don't want a wobbly camera
 		}
-		vec3.scale(playerPos, playerPos, LEVEL_SCALE);
 
 		if (bird) {
 			mat4.lookAt(this.viewMatrix, [114, 250, 130], [114, 0, 130], [0, 0, 1]);
@@ -365,10 +363,9 @@ class Key {
 		this.lockPosition = vec3.create();
 		this.radius = 0.5;
 
-		this.keyModel.setUniformScale(1);
-		this.lockModel.setUniformScale(0.02);
+		this.keyModel.setUniformScale(0.25);
+		this.lockModel.setUniformScale(0.005);
 
-		const scaledPos = vec3.create();
 		this.rotAxis = vec3.fromValues(0, 1, 0);
 
 		this.lockRotAxis = [0, 0, 1];
@@ -389,12 +386,10 @@ class Key {
 		];
 
 		vec3.copy(this.keyPosition, keyPositions[this.index]);
-		vec3.scale(scaledPos, this.keyPosition, LEVEL_SCALE);
-		this.keyModel.setPosition(scaledPos);
+		this.keyModel.setPosition(this.keyPosition);
 
 		vec3.copy(this.lockPosition, lockPositions[this.index]);
-		vec3.scale(scaledPos, this.lockPosition, LEVEL_SCALE);
-		this.lockModel.setPosition(scaledPos);
+		this.lockModel.setPosition(this.lockPosition);
 	}
 
 	update(_dt: number) {
@@ -439,11 +434,9 @@ class Door {
 
 		this.position = vec3.fromValues(28.5, 0, 27);
 
-		this.model.setUniformScale(4);
+		this.model.setUniformScale(1);
 
-		const scaledPos = vec3.create();
-		vec3.scale(scaledPos, this.position, LEVEL_SCALE);
-		this.model.setPosition(scaledPos);
+		this.model.setPosition(this.position);
 
 		// block the home base
 		state.grid.set(27, 27, true);
@@ -469,8 +462,7 @@ class Door {
 			const step = Math.max(0, Math.min(1, (state.tCur - this.openT0) / 4));
 			this.position[0] = 28.5 + ((Math.random() - 0.5) * 0.03);
 			this.position[1] = -3 * step;
-			const scaledPos = vec3.scale([], this.position, LEVEL_SCALE);
-			this.model.setPosition(scaledPos);
+			this.model.setPosition(this.position);
 
 			if (step === 1) {
 				// unblock
@@ -530,7 +522,7 @@ class Player {
 	movePos = vec2.create();
 
 	constructor() {
-		this.model.setUniformScale(1);
+		this.model.setUniformScale(0.25);
 	}
 
 	moveTo2D(x: number, z: number) {
@@ -546,12 +538,12 @@ class Player {
 	update(dt: number) {
 		if (this.dieT >= 0) {
 			const meltStep = (state.tCur - this.dieT) / 4;
-			const meltClamp = Math.max(0, Math.min(1, meltStep));
-			this.model.setScale(1 + meltClamp * 3, Math.max(0.1, Math.pow(1 - meltClamp, 2)), 1 + meltClamp * 3);
+			const meltClamp = clamp01f(meltStep);
+			this.model.setScale(0.25 + meltClamp * .75, Math.max(0.1, 0.25 * Math.pow(1 - meltClamp, 2)), 0.25 + meltClamp * 0.75);
 
 			if (meltStep >= 2) {
 				// back to original position
-				this.model.setUniformScale(1);
+				this.model.setUniformScale(0.25);
 				this.moveTo2D(28.5, 25);
 				this.viewAngle = Math.PI / -2; // radians
 				this.dieT = -1;
@@ -606,8 +598,7 @@ class Player {
 	}
 
 	draw(pass: RenderPass) {
-		const scaledPos = vec3.scale([], this.position, LEVEL_SCALE);
-		this.model.setPosition(scaledPos);
+		this.model.setPosition(this.position);
 		this.model.setRotation(this.rotAxis, -this.viewAngle);
 		pass.draw({ model: this.model, program: state.modelProgram });
 	}
@@ -649,7 +640,7 @@ class Abomination {
 	};
 
 	constructor(index: number) {
-		this.model.setUniformScale(5);
+		this.model.setUniformScale(1.25);
 		this.direction = Abomination.spawnData[index].direction;
 		this.pathPos = vec2.clone(Abomination.spawnData[index].pathPos);
 	}
@@ -663,11 +654,10 @@ class Abomination {
 				const dirVec3 = vec3.fromValues(dirVec2[0], 0, dirVec2[1]);
 
 				const moveOffset = vec3.scale([0, 0, 0], dirVec3, this.pathStep / 2);
-				const scaledPos = vec3.set([0, 0, 0], this.pathPos[0] + 0.5, 0, this.pathPos[1] + 0.5);
-				vec3.add(scaledPos, scaledPos, moveOffset);
+				const visualPos = vec3.set([0, 0, 0], this.pathPos[0] + 0.5, 0, this.pathPos[1] + 0.5);
+				vec3.add(visualPos, visualPos, moveOffset);
 
-				vec3.scale(scaledPos, scaledPos, LEVEL_SCALE);
-				this.model.setPosition(scaledPos);
+				this.model.setPosition(visualPos);
 				this.model.setRotation(this.rotAxis, Abomination.rotations[this.direction]);
 
 				// moved 1 full tile

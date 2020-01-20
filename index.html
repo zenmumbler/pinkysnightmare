@@ -64,10 +64,10 @@
 		float4 position : SV_Position;
 		float3 colour : attribute(1);
 	}
-	
+
 	vertex FragmentData vertex_main(
-		float3 position : attribute(0), 
-		float3 colour : attribute(1), 
+		float3 position : attribute(0),
+		float3 colour : attribute(1),
 		constant float4x4[] mvpMatrix : register(b0))
 	{
 		FragmentData out;
@@ -75,13 +75,13 @@
 		out.colour = colour;
 		return out;
 	}
-	
+
 	fragment float4 fragment_main(
 		float3 colour : attribute(1)
 	) : SV_Target 0
 	{
 		return float4(colour, 1.0);
-	}	
+	}
 </script>
 
 <script id="texturedGPU" type="x-shader/x-webgpu">
@@ -89,10 +89,10 @@
 		float4 position : SV_Position;
 		float3 colour : attribute(1);
 	}
-	
+
 	vertex FragmentData vertex_main(
-		float3 position : attribute(0), 
-		float3 colour : attribute(1), 
+		float3 position : attribute(0),
+		float3 colour : attribute(1),
 		constant float4x4[] mvpMatrix : register(b0))
 	{
 		FragmentData out;
@@ -100,13 +100,13 @@
 		out.colour = colour;
 		return out;
 	}
-	
+
 	fragment float4 fragment_main(
 		float3 colour : attribute(1)
 	) : SV_Target 0
 	{
 		return float4(colour, 1.0);
-	}	
+	}
 </script>
 
 <script id="standardVert" type="x-shader/x-vertex">
@@ -135,8 +135,8 @@
 	void main(void) {
 		vec3 fogColor = vec3(0.1, 0.0, 0.05);
 
-		const float fogDistance = 8.0;
-		float fogDensity = clamp((length(vertexPos_cam_intp) - fogDistance) / 32.0, 0.0, 0.95);
+		const float fogDistance = 2.0;
+		float fogDensity = clamp((length(vertexPos_cam_intp) - fogDistance) / 8.0, 0.0, 0.95);
 		vec3 outColor = vec3(mix(vertexColor_intp, fogColor, fogDensity));
 
 		gl_FragColor = vec4(outColor, 1.0);
@@ -176,8 +176,8 @@
 	void main(void) {
 		vec4 fogColor = vec4(0.1, 0.0, 0.05, 1.0);
 
-		const float fogDistance = 8.0;
-		float fogDensity = clamp((length(vertexPos_cam_intp) - fogDistance) / 32.0, 0.0, 0.95);
+		const float fogDistance = 2.0;
+		float fogDensity = clamp((length(vertexPos_cam_intp) - fogDistance) / 8.0, 0.0, 0.95);
 		vec4 texColor = texture2D(diffuseSampler, vertexUV_intp);
 		vec4 outColor = min(vec4(vertexColor_intp, 1.0), texColor);
 

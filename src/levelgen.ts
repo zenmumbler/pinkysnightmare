@@ -5,8 +5,6 @@ import { vec2, vec3, vec4 } from "stardazed/vector";
 import { u8Color, quickGeometry, loadImageData } from "./asset.js";
 import { RenderMesh, Renderer } from "./render";
 
-export const LEVEL_SCALE = 4.0;
-
 export type CameraPoint = NumArray & { doorCam: boolean };
 
 export interface MapData {
@@ -23,7 +21,7 @@ function buildMapFromImageData(renderer: Renderer, pix: ImageData): MapData {
 	const data = pix.data, pixw = pix.width, pixh = pix.height;
 	let inuse = 0, offset = 0, gridOffset = 0;
 
-	const HEIGHT = 25.0;       // will appear inf high
+	const HEIGHT = 6.0;       // will appear inf high
 
 	const vertexes: number[] = [], normals: number[] = [], colours: number[] = [], cameras: CameraPoint[] = [], grid = [], path = [];
 
@@ -79,10 +77,10 @@ function buildMapFromImageData(renderer: Renderer, pix: ImageData): MapData {
 			}
 
 			if (data[offset] === 0) {
-				const xa = x * LEVEL_SCALE,
-					xb = (x + 1) * LEVEL_SCALE,
-					za = z * LEVEL_SCALE,
-					zb = (z + 1) * LEVEL_SCALE,
+				const xa = x,
+					xb = (x + 1),
+					za = z,
+					zb = (z + 1),
 					h = HEIGHT;
 
 				if (data[offset + 2] === 255) {
