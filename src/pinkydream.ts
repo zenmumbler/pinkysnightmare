@@ -6,7 +6,7 @@ import { deg2rad, intRandom, clamp01f } from "stardazed/core";
 import { vec2, vec3, mat2, mat4, quat } from "stardazed/vector";
 import { $1, on, show, hide } from "./util.js";
 import { u8Color, makeDoorGeometry } from "./asset.js";
-import { Renderer, RenderTexture, RenderMesh, RenderModel, WebGLRenderer, RenderProgram, RenderPass } from "./render";
+import { Renderer, RenderTexture, RenderMesh, RenderProgram, WebGLRenderer, WebGPURenderer } from "./render";
 import { genMapMesh, CameraPoint, MapData } from "./levelgen.js";
 import { loadObjFile } from "./objloader.js";
 import { Grid, Direction } from "./grid";
@@ -34,6 +34,7 @@ interface Transformable {
 	readonly position: NumArray;
 	readonly rotation: NumArray;
 	readonly scale: NumArray;
+	modelMatrix: Float32Array;
 }
 
 function isTransformable(e: any): e is Transformable {
@@ -63,11 +64,16 @@ function isUpdatable(e: any): e is Updatable {
 }
 
 interface Drawable {
-	draw(pass: RenderPass): void;
+	mesh: RenderMesh;
+	program: RenderProgram;
+	texture?: RenderTexture;
 }
 
-function isDrawable(e: any): e is Drawable {
-	return e && typeof e === "object" && typeof e.draw === "function";
+function isDrawable(d: any): d is Drawable {
+	return d && typeof d === "object" &&
+		typeof d.mesh === "object" &&
+		typeof d.program === "object" &&
+		(typeof d.texture === "object" || d.texture === undefined);
 }
 
 interface Collidable {
@@ -88,9 +94,10 @@ function isCollidable(e: any): e is Collidable {
 class Scene {
 	entities: Entity[] = [];
 	updatables: Updatable[] = [];
-	drawables: Drawable[] = [];
+	drawables: (Drawable & Transformable)[] = [];
 	collidables: (Collidable & Transformable)[] = [];
 	camera: Camera | undefined;
+	matrices: Float32Array[] = [];
 
 	addEntity<E extends Entity>(e: E): E {
 		this.entities.push(e);
@@ -101,11 +108,14 @@ class Scene {
 		if (isUpdatable(e)) {
 			this.updatables.push(e);
 		}
-		if (isDrawable(e)) {
-			this.drawables.push(e);
-		}
-		if (isCollidable(e) && isTransformable(e)) {
-			this.collidables.push(e);
+		if (isTransformable(e)) {
+			e.modelMatrix = mat4.create();
+			if (isDrawable(e)) {
+				this.drawables.push(e);
+			}
+			if (isCollidable(e)) {
+				this.collidables.push(e);
+			}
 		}
 		return e;
 	}
@@ -148,7 +158,12 @@ class Scene {
 		const pass = renderer.createPass(camera.projectionMatrix, camera.viewMatrix, assets.fogLimits);
 
 		for (const d of this.drawables) {
-			d.draw(pass);
+			pass.draw({
+				modelMatrix: mat4.fromRotationTranslationScale(d.modelMatrix, d.rotation, d.position, d.scale),
+				mesh: d.mesh,
+				program: d.program,
+				texture: d.texture
+			});
 		}
 
 		pass.finish();
@@ -178,14 +193,11 @@ class Maze {
 	position = [0, 0, 0];
 	rotation = quat.create();
 	scale = [1, 1, 1];
-	mapModel: RenderModel;
+	mesh: RenderMesh;
+	program = assets.modelProgram;
 
 	constructor(mapMesh: RenderMesh) {
-		this.mapModel = renderer.createModel([mapMesh]);
-	}
-
-	draw(pass: RenderPass) {
-		pass.draw({ model: this.mapModel, program: assets.modelProgram });
+		this.mesh = mapMesh;
 	}
 }
 
@@ -285,7 +297,8 @@ class Key {
 	position: NumArray;
 	rotation = quat.create();
 	scale = [0.25, 0.25, 0.25];
-	model = renderer.createModel([assets.meshes["key"]]);
+	mesh = assets.meshes["key"];
+	program = assets.modelProgram;
 	
 	found: boolean;
 	index: number;
@@ -320,19 +333,14 @@ class Key {
 
 		quat.setAxisAngle(this.rotation, this.rotAxis, App.tCur * 1.3);
 	}
-
-	draw(pass: RenderPass) {
-		if (! this.found) {
-			pass.draw({ model: this.model, program: assets.modelProgram });
-		}
-	}
 }
 
 class Lock {
 	position: NumArray;
 	rotation = quat.create();
-	scale = [0.05, 0.05, 0.05];
-	model: RenderModel;
+	scale = [0.005, 0.005, 0.005];
+	mesh = assets.meshes["lock"];
+	program = assets.modelProgram;
 
 	key: Key;
 
@@ -347,10 +355,7 @@ class Lock {
 
 	constructor(key: Key) {
 		this.key = key;
-		this.model = renderer.createModel([assets.meshes["lock"]]);
-		
 		this.position = Lock.lockPositions[this.key.index];
-		this.model.setUniformScale(0.005);
 	}
 
 	update(_dt: number) {
@@ -359,12 +364,6 @@ class Lock {
 		}
 		const lrt = (Math.PI / 40) * Math.sin(App.tCur * 2);
 		quat.setAxisAngle(this.rotation, this.rotAxis, lrt);
-	}
-
-	draw(pass: RenderPass) {
-		if (! this.key.found) {
-			pass.draw({ model: this.model, program: assets.modelProgram });
-		}
 	}
 }
 
@@ -375,7 +374,9 @@ class Door {
 	position = [28.5, 0, 27];
 	rotation = quat.create();
 	scale = [1, 1, 1];
-	model = renderer.createModel([assets.meshes.door], assets.textures["door"]);
+	mesh = assets.meshes.door;
+	program = assets.texturedProgram;
+	texture = assets.textures["door"];
 
 	state: "closed" | "opening" | "open";
 	openT0 = 0;
@@ -423,10 +424,6 @@ class Door {
 			}
 		}
 	}
-
-	draw(pass: RenderPass) {
-		pass.draw({ model: this.model, program: assets.texturedProgram });
-	}
 }
 
 
@@ -460,7 +457,8 @@ class Player {
 	position = vec3.fromValues(28.5, 0.3, 25); // grid units
 	rotation = quat.create();
 	scale = [0.25, 0.25, 0.25];
-	model = renderer.createModel([assets.meshes["spookje"]]);
+	mesh = assets.meshes["spookje"];
+	program = assets.modelProgram;
 
 	viewAngle = Math.PI / -2; // radians
 	turnSpeed = Math.PI; // radians / sec
@@ -473,7 +471,6 @@ class Player {
 
 	constructor(grid: Grid) {
 		this.grid = grid;
-		this.model.setUniformScale(0.25);
 	}
 
 	moveTo2D(x: number, z: number) {
@@ -553,10 +550,6 @@ class Player {
 		this.position[1] = 0.35 + 0.05 * Math.sin(App.tCur * 3);
 		quat.setAxisAngle(this.rotation, this.rotAxis, -this.viewAngle);
 	}
-
-	draw(pass: RenderPass) {
-		pass.draw({ model: this.model, program: assets.modelProgram });
-	}
 }
 
 
@@ -567,7 +560,9 @@ class Abomination {
 	position: NumArray;
 	rotation = quat.create();
 	scale = [1.25, 1.25, 1.25];
-	model = renderer.createModel([assets.meshes["pac1"], assets.meshes["pac2"]], assets.textures["crackpac"]);
+	mesh = assets.meshes["pac0"];
+	program = assets.texturedProgram;
+	texture = assets.textures["crackpac"];
 
 	grid: Grid;
 
@@ -613,6 +608,7 @@ class Abomination {
 		if (this.phase === "move") {
 			if (App.tCur - this.lastStepT > this.stepDuration) {
 				this.pathStep++;
+				this.mesh = assets.meshes["pac" + (1 - (this.pathStep & 1))];
 				this.lastStepT = App.tCur;
 				const dirVec2 = Abomination.directionVecs[this.direction];
 				const dirVec3 = vec3.fromValues(dirVec2[0], 0, dirVec2[1]);
@@ -661,10 +657,6 @@ class Abomination {
 				this.lastStepT = App.tCur;
 			}
 		}
-	}
-
-	draw(pass: RenderPass) {
-		pass.draw({ model: this.model, program: assets.texturedProgram, meshIndex: 1 - (this.pathStep & 1) });
 	}
 }
 
@@ -822,8 +814,8 @@ async function init() {
 	assets.texturedProgram = renderer.createProgram("textured");
 
 	async function meshFromOBJFile(filePath: string, fixedColour: number[]) {
-		const pac1Geom = await loadObjFile(filePath, fixedColour);
-		return renderer.createMesh(pac1Geom);
+		const geom = await loadObjFile(filePath, fixedColour);
+		return renderer.createMesh(geom);
 	}
 
 	const pacColor = u8Color(213, 215, 17);
@@ -842,8 +834,8 @@ async function init() {
 	const mapData = stuff[0];
 	assets.textures["door"] = stuff[1];
 	assets.textures["crackpac"] = stuff[2];
-	assets.meshes["pac1"] = stuff[3];
-	assets.meshes["pac2"] = stuff[4];
+	assets.meshes["pac0"] = stuff[3];
+	assets.meshes["pac1"] = stuff[4];
 	assets.meshes["key"] = stuff[5];
 	assets.meshes["lock"] = stuff[6];
 	assets.meshes["spookje"] = stuff[7];

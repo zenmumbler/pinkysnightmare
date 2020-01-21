@@ -4,47 +4,6 @@ import { Geometry, VertexAttributeRole } from "stardazed/geometry";
 import { assert } from "./util";
 import { loadImageData } from "./asset";
 
-/** Transform and RenderMesh in one */
-export class RenderModel {
-	private meshes: RenderMesh[];
-	texture: RenderTexture | undefined;
-
-	private scaleMat = mat4.create();
-	private rotMat = mat4.create();
-	private transMat = mat4.create();
-	private modelMatrix = mat4.create();
-	private modelViewMatrix = mat4.create();
-
-	constructor(meshes: RenderMesh[], texture?: RenderTexture) {
-		this.meshes = meshes;
-		this.texture = texture;
-	}
-
-	draw(viewMatrix: Float32Array, program: RenderProgram, meshIndex: number) {
-		mat4.multiply(this.modelMatrix, this.transMat, this.rotMat);
-		mat4.multiply(this.modelMatrix, this.modelMatrix, this.scaleMat);
-
-		mat4.multiply(this.modelViewMatrix, viewMatrix, this.modelMatrix);
-		this.meshes[meshIndex].draw(this.modelViewMatrix, program, this.texture);
-	}
-
-	setUniformScale(s: number) {
-		mat4.fromScaling(this.scaleMat, [s, s, s]);
-	}
-
-	setScale(sx: number, sy: number, sz: number) {
-		mat4.fromScaling(this.scaleMat, [sx, sy, sz]);
-	}
-
-	setPosition(v3: NumArray) {
-		mat4.fromTranslation(this.transMat, v3);
-	}
-
-	setRotation(axis: NumArray, angle: number) {
-		mat4.fromRotation(this.rotMat, angle, axis);
-	}
-}
-
 export interface RenderProgram {
 	readonly program: any;
 }
@@ -58,9 +17,10 @@ export interface RenderMesh {
 }
 
 export interface RenderCommand {
-	model: RenderModel;
+	modelMatrix: Float32Array;
+	mesh: RenderMesh;
 	program: RenderProgram;
-	meshIndex?: number;
+	texture?: RenderTexture;
 }
 
 export interface RenderPass {
@@ -73,7 +33,6 @@ export interface Renderer {
 	createMesh(geom: Geometry): RenderMesh;
 	createTexture(fileName: string): Promise<RenderTexture>;
 	createProgram(name: string): RenderProgram;
-	createModel(meshes: RenderMesh[], texture?: RenderTexture): RenderModel;
 
 	createPass(projMatrix: Float32Array, viewMatrix: Float32Array, fogLimits: Float32List): RenderPass;
 }
@@ -277,14 +236,11 @@ export class WebGLRenderer implements Renderer {
 		return new GLMesh(this.gl, geom);
 	}
 
-	createModel(meshes: RenderMesh[], texture?: RenderTexture) {
-		return new RenderModel(meshes, texture);
-	}
-
 	createPass(projMatrix: Float32Array, viewMatrix: Float32Array, fogLimits: Float32List) {
 		const gl = this.gl;
 		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 		const cmds = new Map<RenderProgram, RenderCommand[]>();
+		const mvMatrix = mat4.create();
 
 		const pass: RenderPass = {
 			draw(cmd: RenderCommand) {
@@ -300,7 +256,8 @@ export class WebGLRenderer implements Renderer {
 					gl.uniformMatrix4fv(glProgram.projMatrixUniform, false, projMatrix);
 					gl.uniform2fv(glProgram.fogLimitsUniform, fogLimits);
 					for (const cmd of cmdList) {
-						cmd.model.draw(viewMatrix, program, cmd.meshIndex || 0);
+						mat4.multiply(mvMatrix, viewMatrix, cmd.modelMatrix);
+						cmd.mesh.draw(mvMatrix, program, cmd.texture);
 					}
 				}
 			}
@@ -571,10 +528,6 @@ export class WebGPURenderer implements Renderer {
 		return { program: { module, bindGroupLayout } };
 	}
 
-	createModel(meshes: RenderMesh[], texture?: RenderTexture): RenderModel {
-		return new RenderModel(meshes, texture);
-	}
-
 	createPass(projMatrix: Float32Array, viewMatrix: Float32Array, _fogLimits: Float32List): RenderPass {
 		const encoder = this.device.createCommandEncoder();
 		const rpd = this.rpd;
@@ -585,8 +538,8 @@ export class WebGPURenderer implements Renderer {
 		const renderer = this;
 		return {
 			draw(cmd: RenderCommand) {
-				cmd.model.texture = { texture: pass };
-				cmd.model.draw(pv, cmd.program, cmd.meshIndex || 0);
+				cmd.texture = { texture: pass };
+				cmd.mesh.draw(pv, cmd.program, undefined);
 			},
 			finish() {
 				pass.endPass();
