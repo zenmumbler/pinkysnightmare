@@ -278,16 +278,14 @@ class End {
 		if (vec2.distance(playerPos, this.position) < this.radius) {
 			this.T = state.tCur;
 
-			const totalSeconds = this.T << 0;
-			const minutes = (totalSeconds / 60) << 0;
+			const totalSeconds = this.T | 0;
+			const minutes = (totalSeconds / 60) | 0;
 			const seconds = totalSeconds - (minutes * 60);
 
 			$1("#minutes").textContent = "" + minutes;
 			$1("#seconds").textContent = "" + seconds;
 
-			hide("canvas");
-			show("#victory");
-			mode = "victory";
+			showVictory();
 		}
 	}
 
@@ -574,6 +572,13 @@ function showTitle() {
 	hide("canvas");
 	hide("#victory");
 	show("#run");
+}
+
+function showVictory() {
+	mode = "victory";
+	hide("canvas");
+	show("#victory");
+	hide("#run");
 }
 
 
