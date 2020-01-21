@@ -4,20 +4,19 @@
 
 import { deg2rad, intRandom, clamp01f } from "stardazed/core";
 import { vec2, vec3, mat2, mat4 } from "stardazed/vector";
-import { $1, on, show, hide, assert } from "./util.js";
+import { $1, on, show, hide } from "./util.js";
 import { u8Color, makeDoorGeometry } from "./asset.js";
 import { Renderer, RenderTexture, RenderMesh, RenderModel, WebGLRenderer, RenderProgram, RenderPass } from "./render";
 import { genMapMesh, CameraPoint } from "./levelgen.js";
 import { loadObjFile } from "./objloader.js";
+import { Grid, Direction } from "./grid";
+import { Input } from "./input";
 
 interface State {
 	// timing
 	t0: number;
 	tCur: number;
 	tLast: number;
-
-	// input
-	keys: boolean[];
 
 	// entities
 	keyItems: Key[];
@@ -41,7 +40,7 @@ let state: State;
 let renderer: Renderer;
 let bird = false;
 
-let active = true, mode = "title";
+let mode = "title";
 
 const KEY_UP = 38, KEY_DOWN = 40, KEY_LEFT = 37, KEY_RIGHT = 39,
 	KEY_W = "W".charCodeAt(0), KEY_A = "A".charCodeAt(0), KEY_S = "S".charCodeAt(0), KEY_D = "D".charCodeAt(0);
@@ -340,20 +339,20 @@ class Player {
 		else {
 			// -- rotation
 			let turnAngle = 0;
-			if (state.keys[KEY_LEFT] || state.keys[KEY_A]) {
+			if (Input.keys[KEY_LEFT] || Input.keys[KEY_A]) {
 				turnAngle = -this.turnSpeed;
 			}
-			else if (state.keys[KEY_RIGHT] || state.keys[KEY_D]) {
+			else if (Input.keys[KEY_RIGHT] || Input.keys[KEY_D]) {
 				turnAngle = this.turnSpeed;
 			}
 			this.viewAngle += turnAngle * dt;
 
 			// -- movement
 			let speed = 0;
-			if (state.keys[KEY_UP] || state.keys[KEY_W]) {
+			if (Input.keys[KEY_UP] || Input.keys[KEY_W]) {
 				speed = -this.speed;
 			}
-			else if (state.keys[KEY_DOWN] || state.keys[KEY_S]) {
+			else if (Input.keys[KEY_DOWN] || Input.keys[KEY_S]) {
 				speed = this.speed;
 			}
 
@@ -535,7 +534,7 @@ function nextFrame() {
 
 	state.tLast = state.tCur;
 
-	if (active && (state.end.T < 0)) {
+	if (Input.active && (mode === "game")) {
 		requestAnimationFrame(nextFrame);
 	}
 }
@@ -596,26 +595,12 @@ async function init() {
 	state.modelProgram = renderer.createProgram("standard");
 	state.texturedProgram = renderer.createProgram("textured");
 
-	window.onkeydown = function(evt: KeyboardEvent) {
-		const kc = evt.keyCode;
-		state.keys[kc] = true;
-		if (! evt.metaKey) {
-			evt.preventDefault();
-		}
-	};
-	window.onkeyup = function(evt: KeyboardEvent) {
-		const kc = evt.keyCode;
-		state.keys[kc] = false;
-		if (! evt.metaKey) {
-			evt.preventDefault();
-		}
-	};
-	window.onblur = function() { active = false; state.keys = []; };
-	window.onfocus = function() {
-		active = true;
-		if (mode === "game") {
-			state.tLast = (Date.now() / 1000.0) - state.t0;
-			nextFrame();
+	Input.onActiveChange = (active) => {
+		if (active) {
+			if (mode === "game") {
+				state.tLast = (Date.now() / 1000.0) - state.t0;
+				nextFrame();
+			}
 		}
 	};
 
