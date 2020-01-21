@@ -15,7 +15,6 @@ import { Input, KEY_A, KEY_D, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_S, KEY_UP, KEY_
 interface Assets {
 	meshes: Record<string, RenderMesh>;
 	textures: Record<string, RenderTexture>;
-	mapModel: RenderModel;
 	modelProgram: RenderProgram;
 	texturedProgram: RenderProgram;
 	fogLimits: Float32Array;
@@ -173,8 +172,14 @@ const enum CollisionType {
 }
 
 class Maze {
+	mapModel: RenderModel;
+
+	constructor(mapMesh: RenderMesh) {
+		this.mapModel = renderer.createModel([mapMesh]);
+	}
+
 	draw(pass: RenderPass) {
-		pass.draw({ model: assets.mapModel, program: assets.modelProgram });
+		pass.draw({ model: this.mapModel, program: assets.modelProgram });
 	}
 }
 
@@ -655,7 +660,7 @@ class GameScene extends Scene {
 		super();
 
 		const grid = new Grid(mapData.gridW, mapData.gridH, mapData.grid, mapData.path);
-		this.addEntity(new Maze());
+		this.addEntity(new Maze(mapData.mesh));
 
 		const player = this.addEntity(new Player(grid));
 
@@ -798,37 +803,42 @@ async function init() {
 	assets.modelProgram = renderer.createProgram("standard");
 	assets.texturedProgram = renderer.createProgram("textured");
 
-	genMapMesh(renderer).then(async function(mapData) {
-		assets.mapModel = renderer.createModel([mapData.mesh]);
+	async function meshFromOBJFile(filePath: string, fixedColour: number[]) {
+		const pac1Geom = await loadObjFile(filePath, fixedColour);
+		return renderer.createMesh(pac1Geom);
+	}
 
-		assets.meshes["door"] = renderer.createMesh(makeDoorGeometry(mapData.cornerColors));
+	const pacColor = u8Color(213, 215, 17);
+	const before = Date.now();
+	const stuff = await Promise.all([
+		genMapMesh(renderer),
+		renderer.createTexture("assets/doortex.png"),
+		renderer.createTexture("assets/crackpac.png"),
+		meshFromOBJFile("assets/pac1.obj", pacColor),
+		meshFromOBJFile("assets/pac2.obj", pacColor),
+		meshFromOBJFile("assets/key.obj", u8Color(201, 163, 85)),
+		meshFromOBJFile("assets/lock.obj", u8Color(0x66, 0x77, 0x88)),
+		meshFromOBJFile("assets/spookje.obj", u8Color(255, 184, 221)),
+	]);
 
-		assets.textures["door"] = await renderer.createTexture("assets/doortex.png");
-		assets.textures["crackpac"] = await renderer.createTexture("assets/crackpac.png");
+	const mapData = stuff[0];
+	assets.textures["door"] = stuff[1];
+	assets.textures["crackpac"] = stuff[2];
+	assets.meshes["pac1"] = stuff[3];
+	assets.meshes["pac2"] = stuff[4];
+	assets.meshes["key"] = stuff[5];
+	assets.meshes["lock"] = stuff[6];
+	assets.meshes["spookje"] = stuff[7];
+	assets.meshes["door"] = renderer.createMesh(makeDoorGeometry(mapData.cornerColors));
 
-		const pacColor = u8Color(213, 215, 17);
-		const pac1Geom = await loadObjFile("assets/pac1.obj", pacColor);
-		assets.meshes["pac1"] = renderer.createMesh(pac1Geom);
+	console.info("Asset load", Date.now() - before, "ms");
 
-		const pac2Geom = await loadObjFile("assets/pac2.obj", pacColor);
-		assets.meshes["pac2"] = renderer.createMesh(pac2Geom);
+	gameScene = new GameScene(canvas, mapData);
+	titleScreen = new TitleScreen();
+	victoryScreen = new VictoryScreen();
 
-		const keyGeom = await loadObjFile("assets/key.obj", u8Color(201, 163, 85));
-		assets.meshes["key"] = renderer.createMesh(keyGeom);
-
-		const lockGeom = await loadObjFile("assets/lock.obj", u8Color(0x66, 0x77, 0x88));
-		assets.meshes["lock"] = renderer.createMesh(lockGeom);
-
-		const spookjeGeom = await loadObjFile("assets/spookje.obj", u8Color(255, 184, 221));
-		assets.meshes["spookje"] = renderer.createMesh(spookjeGeom);
-
-		gameScene = new GameScene(canvas, mapData);
-		titleScreen = new TitleScreen();
-		victoryScreen = new VictoryScreen();
-
-		App.setScene(titleScreen);
-		App.nextFrame();
-	});
+	App.setScene(titleScreen);
+	App.nextFrame();
 }
 
 on(window, "load", init);

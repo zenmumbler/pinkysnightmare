@@ -85,9 +85,6 @@ export async function loadImageData(fileName: string) {
 	canvas.width = image.width;
 	canvas.height = image.height;
 	const ctx = canvas.getContext("2d")!;
-	(ctx as any).webkitImageSmoothingEnabled = false;
-	(ctx as any).mozImageSmoothingEnabled = false;
-	(ctx as any).msImageSmoothingEnabled = false;
 	ctx.imageSmoothingEnabled = false;
 	ctx.drawImage(image, 0, 0);
 	return ctx.getImageData(0, 0, image.width, image.height);
