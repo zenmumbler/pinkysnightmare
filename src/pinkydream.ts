@@ -7,7 +7,7 @@ import { vec2, vec3, mat2, mat4 } from "stardazed/vector";
 import { $1, on, show, hide } from "./util.js";
 import { u8Color, makeDoorGeometry } from "./asset.js";
 import { Renderer, RenderTexture, RenderMesh, RenderModel, WebGLRenderer, RenderProgram, RenderPass } from "./render";
-import { genMapMesh, CameraPoint } from "./levelgen.js";
+import { genMapMesh, CameraPoint, MapData } from "./levelgen.js";
 import { loadObjFile } from "./objloader.js";
 import { Grid, Direction } from "./grid";
 import { Input, KEY_A, KEY_D, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_S, KEY_UP, KEY_W } from "./input";
@@ -17,15 +17,6 @@ interface State {
 	t0: number;
 	tCur: number;
 	tLast: number;
-
-	// entities
-	keyItems: Key[];
-	pacs: Abomination[];
-	player: Player;
-	door: Door;
-	grid: Grid;
-	end: End;
-	camera: FixedCamera;
 
 	// assets and render stuff
 	meshes: Record<string, RenderMesh>;
@@ -38,18 +29,19 @@ interface State {
 
 let state: State;
 let renderer: Renderer;
-const bird = false;
-
-let mode = "title";
-
-const KEY_UP = 38, KEY_DOWN = 40, KEY_LEFT = 37, KEY_RIGHT = 39,
-	KEY_W = "W".charCodeAt(0), KEY_A = "A".charCodeAt(0), KEY_S = "S".charCodeAt(0), KEY_D = "D".charCodeAt(0);
-
+const bird = true;
 
 // ----- Sort of an Object ECS
 
 interface Entity {
 	readonly type: string;
+	name?: string;
+}
+
+function isEntity(e: any): e is Entity {
+	return e && typeof e === "object" &&
+		(e.name === undefined || typeof e.name === "string")
+		&& typeof e.type === "string";
 }
 
 interface Camera {
@@ -91,12 +83,15 @@ function isCollidable(e: any): e is Collidable {
 }
 
 class Scene {
+	entities: Entity[] = [];
 	updatables: Updatable[] = [];
 	drawables: Drawable[] = [];
 	collidables: Collidable[] = [];
 	camera: Camera | undefined;
 
-	addEntity<E extends Entity>(e: E) {
+	addEntity<E extends Entity>(e: E): E {
+		this.entities.push(e);
+
 		if (isCamera(e)) {
 			this.camera = e;
 		}
@@ -109,6 +104,23 @@ class Scene {
 		if (isCollidable(e)) {
 			this.collidables.push(e);
 		}
+		return e;
+	}
+
+	update() {
+		// update all elements of this scene
+	}
+
+	draw() {
+		// render this scene
+	}
+
+	show() {
+		// show this scene
+	}
+
+	hide() {
+		// hide this scene
 	}
 }
 
@@ -118,11 +130,15 @@ class FixedCamera {
 	projectionMatrix: Float32Array;
 	viewMatrix: Float32Array;
 	fixedPoints: CameraPoint[];
+	player: Player;
+	grid: Grid;
 
-	constructor(canvas: HTMLCanvasElement, fixedPoints: CameraPoint[]) {
+	constructor(canvas: HTMLCanvasElement, fixedPoints: CameraPoint[], player: Player, grid: Grid) {
+		this.player = player;
+		this.grid = grid;
+
 		const w = canvas.width;
 		const h = canvas.height;
-
 		this.projectionMatrix = mat4.create();
 		if (bird) {
 			mat4.perspective(this.projectionMatrix, deg2rad(65), w / h, 1, 100.0);
@@ -139,7 +155,7 @@ class FixedCamera {
 	}
 
 	update(_dt: number) {
-		const playerPos2D = vec2.fromValues(state.player.position[0], state.player.position[2]);
+		const playerPos2D = vec2.fromValues(this.player.position[0], this.player.position[2]);
 
 		// order viewpoints by distance to player
 		this.fixedPoints.sort(function(fpa, fpb) {
@@ -156,7 +172,7 @@ class FixedCamera {
 			// from this viewpoint, cast a ray to the player and find the first map wall we hit
 			vec2.subtract(temp, playerPos2D, camFP);
 			vec2.copy(f2p, temp);
-			const sq = state.grid.castRay(camFP, temp);
+			const sq = this.grid.castRay(camFP, temp);
 
 			// calc distances from cam to wall and player
 			const camToSquareDistSq = vec2.squaredDistance(camFP, sq!.center);
@@ -181,7 +197,7 @@ class FixedCamera {
 		const camY = bestCam.doorCam ? 6 : 5;
 		const camPos = vec3.fromValues(bestCam[0], camY, bestCam[1]);
 
-		const playerPos = vec3.clone(state.player.position);
+		const playerPos = vec3.clone(this.player.position);
 		if (bestCam.doorCam) {
 			vec3.set(playerPos, 28.5, 0, 27); // fixed view of the home base
 		}
@@ -199,6 +215,8 @@ class FixedCamera {
 }
 
 class Key {
+	type = "key";
+
 	keyModel: RenderModel;
 	lockModel: RenderModel;
 	index: number;
@@ -210,7 +228,11 @@ class Key {
 	lockRotAxis: NumArray;
 	lockRotMax: number;
 
-	constructor(index: number) {
+	player: Player;
+
+	constructor(index: number, player: Player) {
+		this.player = player;
+
 		this.keyModel = renderer.createModel([state.meshes["key"]]);
 		this.lockModel = renderer.createModel([state.meshes["lock"]]);
 		this.index = index;
@@ -253,10 +275,10 @@ class Key {
 			return;
 		}
 
-		const playerPos = vec2.fromValues(state.player.position[0], state.player.position[2]);
+		const playerPos = vec2.fromValues(this.player.position[0], this.player.position[2]);
 		const myPos = vec2.fromValues(this.keyPosition[0], this.keyPosition[2]);
 
-		const maxRadius = Math.max(this.radius, state.player.radius);
+		const maxRadius = Math.max(this.radius, this.player.radius);
 		if (vec2.distance(playerPos, myPos) < maxRadius) {
 			this.found = true;
 		}
@@ -276,13 +298,20 @@ class Key {
 
 
 class Door {
+	type = "door";
 	mesh: RenderMesh;
 	model: RenderModel;
 	state: "closed" | "opening" | "open";
 	position: MutNumArray;
 	openT0 = 0;
+	grid: Grid;
+	keyItems: Key[];
+	player: Player;
 
-	constructor() {
+	constructor(player: Player, grid: Grid, keyItems: Key[]) {
+		this.player = player;
+		this.grid = grid;
+		this.keyItems = keyItems;
 		this.mesh = state.meshes.door;
 		this.model = renderer.createModel([this.mesh], state.textures["door"]);
 
@@ -295,17 +324,17 @@ class Door {
 		this.model.setPosition(this.position);
 
 		// block the home base
-		state.grid.set(27, 27, true);
-		state.grid.set(28, 27, true);
-		state.grid.set(29, 27, true);
+		this.grid.set(27, 27, true);
+		this.grid.set(28, 27, true);
+		this.grid.set(29, 27, true);
 	}
 
 	update(_dt: number) {
 		if (this.state === "closed") {
-			const allKeys = state.keyItems.every(function(key) { return key.found; });
+			const allKeys = this.keyItems.every(function(key) { return key.found; });
 
 			if (allKeys) {
-				const playerPos = vec2.fromValues(state.player.position[0], state.player.position[2]);
+				const playerPos = vec2.fromValues(this.player.position[0], this.player.position[2]);
 				const myPos = vec2.fromValues(this.position[0], this.position[2]);
 
 				if (vec2.distance(playerPos, myPos) < 2) {
@@ -322,9 +351,9 @@ class Door {
 
 			if (step === 1) {
 				// unblock
-				state.grid.set(27, 27, false);
-				state.grid.set(28, 27, false);
-				state.grid.set(29, 27, false);
+				this.grid.set(27, 27, false);
+				this.grid.set(28, 27, false);
+				this.grid.set(29, 27, false);
 				this.state = "open";
 			}
 		}
@@ -337,13 +366,19 @@ class Door {
 
 
 class End {
+	type = "end";
 	position = [28.5, 29.5];
 	radius = 1;
 	fadeSec = 4;
 	T = -1;
+	player: Player;
+
+	constructor(player: Player) {
+		this.player = player;
+	}
 
 	update(_dt: number) {
-		const playerPos = vec2.fromValues(state.player.position[0], state.player.position[2]);
+		const playerPos = vec2.fromValues(this.player.position[0], this.player.position[2]);
 		if (vec2.distance(playerPos, this.position) < this.radius) {
 			this.T = state.tCur;
 
@@ -354,28 +389,30 @@ class End {
 			$1("#minutes").textContent = "" + minutes;
 			$1("#seconds").textContent = "" + seconds;
 
-			showVictory();
+			setScene(victoryScreen);
 		}
-	}
-
-	draw() {
 	}
 }
 
 
 class Player {
+	type = "player";
+
+	radius = .25; // grid units
+
 	model = renderer.createModel([state.meshes["spookje"]]);
 	position = vec3.fromValues(0, 0.3, 0); // grid units
 	viewAngle = Math.PI / -2; // radians
 	turnSpeed = Math.PI; // radians / sec
 	speed = 2.3; // grid units / sec
-	radius = .25; // grid units
 	dieT = -1;
 	rotAxis = vec3.fromValues(0, 1, 0);
 	moveMat = mat2.create();
 	movePos = vec2.create();
+	grid: Grid;
 
-	constructor() {
+	constructor(grid: Grid) {
+		this.grid = grid;
 		this.model.setUniformScale(0.25);
 	}
 
@@ -433,14 +470,14 @@ class Player {
 				let newPos: MutNumArray = vec2.create();
 				vec2.add(newPos, oldPos, this.movePos);
 
-				newPos = state.grid.collideAndResolveCircle(oldPos, newPos, this.radius);
+				newPos = this.grid.collideAndResolveCircle(oldPos, newPos, this.radius);
 
 				// warp tunnel
 				if (newPos[0] < 0) {
-					newPos[0] += state.grid.width;
+					newPos[0] += this.grid.width;
 				}
-				if (newPos[0] >= state.grid.width) {
-					newPos[0] -= state.grid.width;
+				if (newPos[0] >= this.grid.width) {
+					newPos[0] -= this.grid.width;
 				}
 				this.position[0] = newPos[0];
 				this.position[2] = newPos[1];
@@ -460,6 +497,7 @@ class Player {
 
 
 class Abomination {
+	type = "abomination";
 	model = renderer.createModel([state.meshes["pac1"], state.meshes["pac2"]], state.textures["crackpac"]);
 	phase = "move";
 	nextDir: Direction = "north";
@@ -471,6 +509,8 @@ class Abomination {
 	rotAxis = vec3.fromValues(0, 1, 0);
 	direction: Direction;
 	pathPos: NumArray;
+	grid: Grid;
+	player: Player;
 
 	static spawnData: { direction: Direction, pathPos: number[] }[] = [
 		// { direction: "north", pathPos: [43, 18] },
@@ -493,7 +533,9 @@ class Abomination {
 		east: [1, 0]
 	};
 
-	constructor(index: number) {
+	constructor(index: number, grid: Grid, player: Player) {
+		this.grid = grid;
+		this.player = player;
 		this.model.setUniformScale(1.25);
 		this.direction = Abomination.spawnData[index].direction;
 		this.pathPos = vec2.clone(Abomination.spawnData[index].pathPos);
@@ -519,7 +561,7 @@ class Abomination {
 					vec2.add(this.pathPos, this.pathPos, dirVec2);
 					this.pathStep = 0;
 
-					const exits = state.grid.pathExits(this.pathPos, this.direction);
+					const exits = this.grid.pathExits(this.pathPos, this.direction);
 					const exit = exits[intRandom(exits.length)];
 
 					if (exit.dir !== this.direction) {
@@ -554,11 +596,10 @@ class Abomination {
 		}
 
 		// -- check collisions against player
-		const playerPos = vec2.fromValues(state.player.position[0], state.player.position[2]);
-
-		const maxRadius = Math.max(this.radius, state.player.radius);
+		const playerPos = vec2.fromValues(this.player.position[0], this.player.position[2]);
+		const maxRadius = Math.max(this.radius, this.player.radius);
 		if (vec2.distance(playerPos, this.pathPos) < maxRadius) {
-			state.player.die();
+			this.player.die();
 		}
 	}
 
@@ -567,97 +608,166 @@ class Abomination {
 	}
 }
 
+// ---------
 
-function drawScene(camera: FixedCamera) {
-	const pass = renderer.createPass(camera.projectionMatrix, camera.viewMatrix, state.fogLimits);
+class GameScene extends Scene {
+	keyItems: Key[] = [];
+	pacs: Abomination[] = [];
+	player: Player;
+	door: Door;
+	end: End;
+	camera: FixedCamera;
+	grid: Grid;
 
-	// -- PLAIN MODELS
-	pass.draw({ model: state.mapModel, program: state.modelProgram });
-	state.player.draw(pass);
-	state.keyItems.forEach(function(key) { key.draw(pass); });
+	constructor(canvas: HTMLCanvasElement, mapData: MapData) {
+		super();
 
-	// -- TEXTURED MODELS
-	state.door.draw(pass);
-	state.pacs.forEach(function(pac) { pac.draw(pass); });
+		this.grid = new Grid(mapData.gridW, mapData.gridH, mapData.grid, mapData.path);
 
-	pass.finish();
+		this.player = this.addEntity(new Player(this.grid));
+		this.player.moveTo2D(28.5, 25);
+
+		this.camera = new FixedCamera(canvas, mapData.cameras, this.player, this.grid);
+
+		this.keyItems.push(this.addEntity(new Key(0, this.player)));
+		this.keyItems.push(this.addEntity(new Key(1, this.player)));
+		this.keyItems.push(this.addEntity(new Key(2, this.player)));
+		this.keyItems.push(this.addEntity(new Key(3, this.player)));
+
+		this.door = this.addEntity(new Door(this.player, this.grid, this.keyItems));
+		this.end = this.addEntity(new End(this.player));
+
+		this.pacs.push(this.addEntity(new Abomination(0, this.grid, this.player)));
+		this.pacs.push(this.addEntity(new Abomination(1, this.grid, this.player)));
+		this.pacs.push(this.addEntity(new Abomination(2, this.grid, this.player)));
+		this.pacs.push(this.addEntity(new Abomination(3, this.grid, this.player)));
+		this.pacs.push(this.addEntity(new Abomination(4, this.grid, this.player)));
+	}
+
+	update() {
+		state.tCur = (Date.now() / 1000.0) - state.t0;
+		const dt = state.tCur - state.tLast;
+
+		this.end.update(dt);
+		this.camera.update(dt);
+		this.player.update(dt);
+		this.keyItems.forEach(function(key) { key.update(dt); });
+		this.door.update(dt);
+		this.pacs.forEach(function(pac) { pac.update(dt); });
+
+		state.tLast = state.tCur;
+
+		if (Input.keys[32]) {
+			console.info(this.player.position);
+		}
+	}
+
+	draw() {
+		const { camera } = this;
+		const pass = renderer.createPass(camera.projectionMatrix, camera.viewMatrix, state.fogLimits);
+
+		// -- PLAIN MODELS
+		pass.draw({ model: state.mapModel, program: state.modelProgram });
+		this.player.draw(pass);
+		this.keyItems.forEach(function(key) { key.draw(pass); });
+
+		// -- TEXTURED MODELS
+		this.door.draw(pass);
+		this.pacs.forEach(function(pac) { pac.draw(pass); });
+
+		pass.finish();
+	}
+
+	show() {
+		show("canvas");
+		state.t0 = Date.now() / 1000;
+		state.tCur = state.t0;
+		state.tLast = state.t0;
+	}
+
+	hide() {
+		hide("canvas");
+	}
+}
+
+class TitleScreen extends Scene {
+	constructor() {
+		super();
+		on("#run", "click", function() {
+			setScene(gameScene);
+		});
+	}
+
+	show() {
+		show("#run");
+	}
+
+	hide() {
+		hide("#run");
+	}
+}
+
+class VictoryScreen extends Scene {
+	constructor() {
+		super();
+		on("#victory", "click", function() {
+			location.reload();
+		});
+	}
+
+	show() {
+		show("#victory");
+	}
+
+	hide() {
+		hide("#victory");
+	}
+}
+
+// ---------
+
+let curScene: Scene | undefined;
+let gameScene: GameScene;
+let titleScreen: TitleScreen;
+let victoryScreen: VictoryScreen;
+
+function setScene(newScene: Scene | undefined) {
+	if (newScene === curScene) {
+		return;
+	}
+	if (curScene) {
+		curScene.hide();
+	}
+	if (newScene) {
+		newScene.show();
+	}
+	curScene = newScene;
 }
 
 function nextFrame() {
-	state.tCur = (Date.now() / 1000.0) - state.t0;
-	const dt = state.tCur - state.tLast;
-	const camera = state.camera;
+	if (curScene) {
+		curScene.update();
+		curScene.draw();
+	}
 
-	// -- update
-	state.end.update(dt);
-	camera.update(dt);
-	state.player.update(dt);
-	state.keyItems.forEach(function(key) { key.update(dt); });
-	state.door.update(dt);
-	state.pacs.forEach(function(pac) { pac.update(dt); });
-
-	// -- render
-	drawScene(camera);
-
-	state.tLast = state.tCur;
-
-	if (Input.active && (mode === "game")) {
+	if (Input.active) {
 		requestAnimationFrame(nextFrame);
 	}
 }
 
+Input.onActiveChange = (active) => {
+	if (active) {
+		state.tLast = (Date.now() / 1000.0) - state.t0;
+		nextFrame();
+	}
+};
 
-function run() {
-	show("canvas");
-	mode = "game";
-
-	state.t0 = Date.now() / 1000.0;
-	state.tCur = 0;
-	state.tLast = 0;
-
-	state.player = new Player();
-	state.player.moveTo2D(28.5, 25);
-
-	state.keyItems.push(new Key(0));
-	state.keyItems.push(new Key(1));
-	state.keyItems.push(new Key(2));
-	state.keyItems.push(new Key(3));
-
-	state.door = new Door();
-	state.end = new End();
-
-	state.pacs.push(new Abomination(0));
-	state.pacs.push(new Abomination(1));
-	state.pacs.push(new Abomination(2));
-	state.pacs.push(new Abomination(3));
-	state.pacs.push(new Abomination(4));
-
-	nextFrame();
-}
-
-
-function showTitle() {
-	mode = "title";
-	hide("canvas");
-	hide("#victory");
-	show("#run");
-}
-
-function showVictory() {
-	mode = "victory";
-	hide("canvas");
-	show("#victory");
-	hide("#run");
-}
-
+// ---------
 
 async function init() {
 	state = {
-		keys: [],
-		keyItems: [],
 		textures: {},
 		meshes: {},
-		pacs: [],
 		fogLimits: new Float32Array(2)
 	} as any as State;
 
@@ -668,37 +778,15 @@ async function init() {
 	state.modelProgram = renderer.createProgram("standard");
 	state.texturedProgram = renderer.createProgram("textured");
 
-	Input.onActiveChange = (active) => {
-		if (active) {
-			if (mode === "game") {
-				state.tLast = (Date.now() / 1000.0) - state.t0;
-				nextFrame();
-			}
-		}
-	};
-
-	on("#run", "click", function() {
-		hide("#run");
-		hide("#victory");
-		run();
-	});
-
-	on("#victory", "click", function() {
-		location.reload();
-	});
-
 	genMapMesh(renderer).then(async function(mapData) {
 		state.mapModel = renderer.createModel([mapData.mesh]);
-		state.camera = new FixedCamera(canvas, mapData.cameras);
-		state.grid = new Grid(mapData.gridW, mapData.gridH, mapData.grid, mapData.path);
 
 		state.meshes["door"] = renderer.createMesh(makeDoorGeometry(mapData.cornerColors));
-
-		const pacColor = u8Color(213, 215, 17);
 
 		state.textures["door"] = await renderer.createTexture("assets/doortex.png");
 		state.textures["crackpac"] = await renderer.createTexture("assets/crackpac.png");
 
+		const pacColor = u8Color(213, 215, 17);
 		const pac1Geom = await loadObjFile("assets/pac1.obj", pacColor);
 		state.meshes["pac1"] = renderer.createMesh(pac1Geom);
 
@@ -714,7 +802,12 @@ async function init() {
 		const spookjeGeom = await loadObjFile("assets/spookje.obj", u8Color(255, 184, 221));
 		state.meshes["spookje"] = renderer.createMesh(spookjeGeom);
 
-		showTitle();
+		gameScene = new GameScene(canvas, mapData);
+		titleScreen = new TitleScreen();
+		victoryScreen = new VictoryScreen();
+
+		setScene(titleScreen);
+		nextFrame();
 	});
 }
 
