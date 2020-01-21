@@ -46,6 +46,57 @@ const KEY_UP = 38, KEY_DOWN = 40, KEY_LEFT = 37, KEY_RIGHT = 39,
 	KEY_W = "W".charCodeAt(0), KEY_A = "A".charCodeAt(0), KEY_S = "S".charCodeAt(0), KEY_D = "D".charCodeAt(0);
 
 
+// ----- Sort of an Object ECS
+
+interface Entity {
+	readonly type: string;
+}
+
+interface Updatable {
+	update(dt: number): void;
+}
+
+function isUpdatable(e: any): e is Updatable {
+	return e && typeof e === "object" && typeof e.update === "function";
+}
+
+interface Drawable {
+	draw(pass: RenderPass): void;
+}
+
+function isDrawable(e: any): e is Drawable {
+	return e && typeof e === "object" && typeof e.draw === "function";
+}
+
+interface Collidable {
+	readonly radius: number;
+	onCollide?(other: Entity & Collidable): void;
+}
+
+function isCollidable(e: any): e is Collidable {
+	return e && typeof e === "object" &&
+		(e.onCollide === undefined || typeof e.onCollide === "function")
+		&& typeof e.radius === "number";
+}
+
+const updatables: Updatable[] = [];
+const drawables: Drawable[] = [];
+const collidables: Collidable[] = [];
+
+function addEntity<E extends Entity>(e: E) {
+	if (isUpdatable(e)) {
+		updatables.push(e);
+	}
+	if (isDrawable(e)) {
+		drawables.push(e);
+	}
+	if (isCollidable(e)) {
+		collidables.push(e);
+	}
+}
+
+// -------
+
 class Camera {
 	projectionMatrix: Float32Array;
 	viewMatrix: Float32Array;
@@ -69,7 +120,7 @@ class Camera {
 		this.viewMatrix = mat4.create();
 	}
 
-	pickClosestVantagePoint() {
+	update(_dt: number) {
 		const playerPos2D = vec2.fromValues(state.player.position[0], state.player.position[2]);
 
 		// order viewpoints by distance to player
@@ -99,12 +150,12 @@ class Camera {
 				bestCam = camFP;
 				break;
 			}
-// 			else {
-// 				console.info("rejecting", vec2.str(camFP), "because", vec2.str(sq.center), "blocks view to", vec2.str(playerPos), camToSquareDistSq, camToPlayerDistSq);
-// 			}
+			// else {
+			// 	console.info("rejecting", vec2.str(camFP), "because", vec2.str(sq.center), "blocks view to", vec2.str(playerPos), camToSquareDistSq, camToPlayerDistSq);
+			// }
 		}
 		if (! bestCam) {
-// 			console.info("CAM FIND FAIL");
+			// console.info("CAM FIND FAIL");
 			bestCam = this.fixedPoints[0];
 		}
 
@@ -521,7 +572,7 @@ function nextFrame() {
 
 	// -- update
 	state.end.update(dt);
-	camera.pickClosestVantagePoint();
+	camera.update(dt);
 	state.player.update(dt);
 	state.keyItems.forEach(function(key) { key.update(dt); });
 	state.door.update(dt);
