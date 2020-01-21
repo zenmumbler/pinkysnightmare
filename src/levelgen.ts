@@ -21,7 +21,7 @@ function buildMapFromImageData(renderer: Renderer, pix: ImageData): MapData {
 	const data = pix.data, pixw = pix.width, pixh = pix.height;
 	let inuse = 0, offset = 0, gridOffset = 0;
 
-	const HEIGHT = 3.0;       // will appear inf high
+	const HEIGHT = 5.0;       // will appear inf high
 
 	const vertexes: number[] = [], normals: number[] = [], colours: number[] = [], cameras: CameraPoint[] = [], grid = [], path = [];
 

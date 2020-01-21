@@ -289,6 +289,10 @@ class Key {
 			return;
 		}
 
+		this.keyModel.setRotation(this.rotAxis, App.tCur * 1.3);
+		const lrt = this.lockRotMax * Math.sin(App.tCur * 2);
+		this.lockModel.setRotation(this.lockRotAxis, lrt);
+
 		const playerPos = vec2.fromValues(this.player.position[0], this.player.position[2]);
 		const myPos = vec2.fromValues(this.keyPosition[0], this.keyPosition[2]);
 
@@ -300,11 +304,7 @@ class Key {
 
 	draw(pass: RenderPass) {
 		if (! this.found) {
-			this.keyModel.setRotation(this.rotAxis, App.tCur * 1.3);
 			pass.draw({ model: this.keyModel, program: assets.modelProgram });
-
-			const lrt = this.lockRotMax * Math.sin(App.tCur * 2);
-			this.lockModel.setRotation(this.lockRotAxis, lrt);
 			pass.draw({ model: this.lockModel, program: assets.modelProgram });
 		}
 	}
@@ -500,11 +500,12 @@ class Player {
 
 		// -- they all float down here
 		this.position[1] = 0.35 + 0.05 * Math.sin(App.tCur * 3);
+
+		this.model.setPosition(this.position);
+		this.model.setRotation(this.rotAxis, -this.viewAngle);
 	}
 
 	draw(pass: RenderPass) {
-		this.model.setPosition(this.position);
-		this.model.setRotation(this.rotAxis, -this.viewAngle);
 		pass.draw({ model: this.model, program: assets.modelProgram });
 	}
 }
