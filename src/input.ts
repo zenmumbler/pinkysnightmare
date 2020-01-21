@@ -1,3 +1,6 @@
+export const KEY_UP = 38, KEY_DOWN = 40, KEY_LEFT = 37, KEY_RIGHT = 39,
+	KEY_W = "W".charCodeAt(0), KEY_A = "A".charCodeAt(0), KEY_S = "S".charCodeAt(0), KEY_D = "D".charCodeAt(0);
+
 class InputHandler {
 	constructor() {
 		window.onkeydown = (evt: KeyboardEvent) => {

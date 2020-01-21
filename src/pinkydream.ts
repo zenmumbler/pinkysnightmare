@@ -10,7 +10,7 @@ import { Renderer, RenderTexture, RenderMesh, RenderModel, WebGLRenderer, Render
 import { genMapMesh, CameraPoint } from "./levelgen.js";
 import { loadObjFile } from "./objloader.js";
 import { Grid, Direction } from "./grid";
-import { Input } from "./input";
+import { Input, KEY_A, KEY_D, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_S, KEY_UP, KEY_W } from "./input";
 
 interface State {
 	// timing
