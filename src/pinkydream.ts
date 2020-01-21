@@ -120,7 +120,15 @@ class Scene {
 
 // -------
 
+class Maze {
+	type = "maze";
+	draw(pass: RenderPass) {
+		pass.draw({ model: assets.mapModel, program: assets.modelProgram });
+	}
+}
+
 class FixedCamera {
+	type = "fixedcamera";
 	projectionMatrix: Float32Array;
 	viewMatrix: Float32Array;
 	fixedPoints: CameraPoint[];
@@ -617,11 +625,12 @@ class GameScene extends Scene {
 		super();
 
 		this.grid = new Grid(mapData.gridW, mapData.gridH, mapData.grid, mapData.path);
+		this.addEntity(new Maze());
 
 		this.player = this.addEntity(new Player(this.grid));
 		this.player.moveTo2D(28.5, 25);
 
-		this.camera = new FixedCamera(canvas, mapData.cameras, this.player, this.grid);
+		this.camera = this.addEntity(new FixedCamera(canvas, mapData.cameras, this.player, this.grid));
 
 		this.keyItems.push(this.addEntity(new Key(0, this.player)));
 		this.keyItems.push(this.addEntity(new Key(1, this.player)));
