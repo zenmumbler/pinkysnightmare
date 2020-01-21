@@ -696,7 +696,13 @@ class GameScene extends Scene {
 		this.pacs.push(this.addEntity(new Abomination(3, this.grid)));
 		this.pacs.push(this.addEntity(new Abomination(4, this.grid)));
 
-		console.info("COLL", this.collidables);
+	update(dt: number) {
+		super.update(dt);
+		if (Input.keys[32]) {
+			for (const k of this.keyItems) {
+				k.found = true;
+			}
+		}
 	}
 
 	show() {
