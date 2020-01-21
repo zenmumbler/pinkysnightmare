@@ -25,7 +25,7 @@ interface State {
 	door: Door;
 	grid: Grid;
 	end: End;
-	camera: Camera;
+	camera: FixedCamera;
 
 	// assets and render stuff
 	meshes: Record<string, RenderMesh>;
@@ -50,6 +50,17 @@ const KEY_UP = 38, KEY_DOWN = 40, KEY_LEFT = 37, KEY_RIGHT = 39,
 
 interface Entity {
 	readonly type: string;
+}
+
+interface Camera {
+	readonly projectionMatrix: Float32Array;
+	readonly viewMatrix: Float32Array;
+}
+
+function isCamera(e: any): e is Camera {
+	return e && typeof e === "object" &&
+		e.projectionMatrix instanceof Float32Array &&
+		e.viewMatrix instanceof Float32Array;
 }
 
 interface Updatable {
@@ -97,12 +108,12 @@ function addEntity<E extends Entity>(e: E) {
 
 // -------
 
-class Camera {
+class FixedCamera {
 	projectionMatrix: Float32Array;
 	viewMatrix: Float32Array;
-	fixedPoints!: CameraPoint[];
+	fixedPoints: CameraPoint[];
 
-	constructor(canvas: HTMLCanvasElement) {
+	constructor(canvas: HTMLCanvasElement, fixedPoints: CameraPoint[]) {
 		const w = canvas.width;
 		const h = canvas.height;
 
@@ -118,6 +129,7 @@ class Camera {
 			state.fogLimits[1] = 8.0;
 		}
 		this.viewMatrix = mat4.create();
+		this.fixedPoints = fixedPoints;
 	}
 
 	update(_dt: number) {
@@ -550,7 +562,7 @@ class Abomination {
 }
 
 
-function drawScene(camera: Camera) {
+function drawScene(camera: FixedCamera) {
 	const pass = renderer.createPass(camera.projectionMatrix, camera.viewMatrix, state.fogLimits);
 
 	// -- PLAIN MODELS
@@ -646,7 +658,6 @@ async function init() {
 	const canvas = document.querySelector("canvas")!;
 	renderer = new WebGLRenderer();
 	await renderer.setup(canvas);
-	state.camera = new Camera(canvas);
 
 	state.modelProgram = renderer.createProgram("standard");
 	state.texturedProgram = renderer.createProgram("textured");
@@ -672,7 +683,7 @@ async function init() {
 
 	genMapMesh(renderer).then(async function(mapData) {
 		state.mapModel = renderer.createModel([mapData.mesh]);
-		state.camera.fixedPoints = mapData.cameras;
+		state.camera = new FixedCamera(canvas, mapData.cameras);
 		state.grid = new Grid(mapData.gridW, mapData.gridH, mapData.grid, mapData.path);
 
 		state.meshes["door"] = renderer.createMesh(makeDoorGeometry(mapData.cornerColors));
