@@ -28,14 +28,17 @@ const bird = false;
 // ----- Sort of an Object ECS
 
 interface Entity {
-	readonly type: string;
-	name?: string;
+	// name?: string;
 }
 
-function isEntity(e: any): e is Entity {
+interface Positionable {
+	readonly position: NumArray;
+}
+
+function isPositionable(e: any): e is Positionable {
 	return e && typeof e === "object" &&
-		(e.name === undefined || typeof e.name === "string")
-		&& typeof e.type === "string";
+		e.position !== undefined &&
+		e.position.length === 3;
 }
 
 interface Camera {
@@ -67,20 +70,24 @@ function isDrawable(e: any): e is Drawable {
 
 interface Collidable {
 	readonly radius: number;
-	onCollide?(other: Entity & Collidable): void;
+	readonly collisionType: number;
+	readonly collisionMask: number;
+	onCollide?(other: Collidable & Positionable): void;
 }
 
 function isCollidable(e: any): e is Collidable {
 	return e && typeof e === "object" &&
 		(e.onCollide === undefined || typeof e.onCollide === "function")
-		&& typeof e.radius === "number";
+		&& typeof e.radius === "number"
+		&& typeof e.collisionType === "number"
+		&& typeof e.collisionMask === "number";
 }
 
 class Scene {
 	entities: Entity[] = [];
 	updatables: Updatable[] = [];
 	drawables: Drawable[] = [];
-	collidables: Collidable[] = [];
+	collidables: (Collidable & Positionable)[] = [];
 	camera: Camera | undefined;
 
 	addEntity<E extends Entity>(e: E): E {
@@ -95,7 +102,7 @@ class Scene {
 		if (isDrawable(e)) {
 			this.drawables.push(e);
 		}
-		if (isCollidable(e)) {
+		if (isCollidable(e) && isPositionable(e)) {
 			this.collidables.push(e);
 		}
 		return e;
@@ -104,6 +111,30 @@ class Scene {
 	update(dt: number) {
 		for (const u of this.updatables) {
 			u.update(dt);
+		}
+
+		// handle collisions (N log N - I think)
+		const collCount = this.collidables.length;
+		for (let ca = 0; ca < collCount; ++ca) {
+			const colliderA = this.collidables[ca];
+			const posA = [colliderA.position[0], colliderA.position[2]];
+			for (let cb = ca + 1; cb < collCount; ++cb) {
+				const colliderB = this.collidables[cb];
+				const a2b = (colliderB.collisionType & colliderA.collisionMask) && colliderA.onCollide;
+				const b2a = (colliderA.collisionType & colliderB.collisionMask) && colliderB.onCollide;
+				if (a2b || b2a) {
+					const posB = [colliderB.position[0], colliderB.position[2]];
+					const maxRadius = Math.max(colliderA.radius, colliderB.radius);
+					if (vec2.distance(posA, posB) < maxRadius) {
+						if (a2b) {
+							colliderA.onCollide!(colliderB);
+						}
+						if (b2a) {
+							colliderB.onCollide!(colliderA);
+						}
+					}
+				}
+			}
 		}
 	}
 
@@ -132,15 +163,22 @@ class Scene {
 
 // -------
 
+const enum CollisionType {
+	NONE   = 0,
+	PLAYER = 0x1,
+	ENEMY  = 0x2,
+	KEY    = 0x4,
+	END    = 0x8,
+	ALL    = 0xF
+}
+
 class Maze {
-	type = "maze";
 	draw(pass: RenderPass) {
 		pass.draw({ model: assets.mapModel, program: assets.modelProgram });
 	}
 }
 
 class FixedCamera {
-	type = "fixedcamera";
 	projectionMatrix: Float32Array;
 	viewMatrix: Float32Array;
 	fixedPoints: CameraPoint[];
@@ -148,6 +186,7 @@ class FixedCamera {
 	grid: Grid;
 
 	constructor(canvas: HTMLCanvasElement, fixedPoints: CameraPoint[], player: Player, grid: Grid) {
+		this.fixedPoints = fixedPoints;
 		this.player = player;
 		this.grid = grid;
 
@@ -165,7 +204,6 @@ class FixedCamera {
 			assets.fogLimits[1] = 8.0;
 		}
 		this.viewMatrix = mat4.create();
-		this.fixedPoints = fixedPoints;
 	}
 
 	update(_dt: number) {
@@ -229,31 +267,28 @@ class FixedCamera {
 }
 
 class Key {
-	type = "key";
+	radius = 0.5;
+	collisionType = CollisionType.KEY;
+	collisionMask = CollisionType.PLAYER;
+	position: NumArray;
 
 	keyModel: RenderModel;
 	lockModel: RenderModel;
 	index: number;
 	found: boolean;
-	keyPosition: NumArray;
 	lockPosition: NumArray;
-	radius: number;
 	rotAxis: NumArray;
 	lockRotAxis: NumArray;
 	lockRotMax: number;
 
-	player: Player;
 
-	constructor(index: number, player: Player) {
-		this.player = player;
-
+	constructor(index: number) {
 		this.keyModel = renderer.createModel([assets.meshes["key"]]);
 		this.lockModel = renderer.createModel([assets.meshes["lock"]]);
 		this.index = index;
 		this.found = false;
-		this.keyPosition = vec3.create();
+		this.position = vec3.create();
 		this.lockPosition = vec3.create();
-		this.radius = 0.5;
 
 		this.keyModel.setUniformScale(0.25);
 		this.lockModel.setUniformScale(0.005);
@@ -277,11 +312,19 @@ class Key {
 			[27.5, 0.6, 26.8]
 		];
 
-		vec3.copy(this.keyPosition, keyPositions[this.index]);
-		this.keyModel.setPosition(this.keyPosition);
+		vec3.copy(this.position, keyPositions[this.index]);
+		this.keyModel.setPosition(this.position);
 
 		vec3.copy(this.lockPosition, lockPositions[this.index]);
 		this.lockModel.setPosition(this.lockPosition);
+	}
+
+	onCollide(_other: Collidable) {
+		console.info("Collected key", this.index);
+		// collided with player
+		this.found = true;
+		// no longer interested in further collisions
+		this.collisionMask = CollisionType.NONE;
 	}
 
 	update(_dt: number) {
@@ -292,14 +335,6 @@ class Key {
 		this.keyModel.setRotation(this.rotAxis, App.tCur * 1.3);
 		const lrt = this.lockRotMax * Math.sin(App.tCur * 2);
 		this.lockModel.setRotation(this.lockRotAxis, lrt);
-
-		const playerPos = vec2.fromValues(this.player.position[0], this.player.position[2]);
-		const myPos = vec2.fromValues(this.keyPosition[0], this.keyPosition[2]);
-
-		const maxRadius = Math.max(this.radius, this.player.radius);
-		if (vec2.distance(playerPos, myPos) < maxRadius) {
-			this.found = true;
-		}
 	}
 
 	draw(pass: RenderPass) {
@@ -312,11 +347,14 @@ class Key {
 
 
 class Door {
-	type = "door";
+	radius = 2;
+	collisionType = CollisionType.END;
+	collisionMask = CollisionType.PLAYER;
+	position: MutNumArray;
+
 	mesh: RenderMesh;
 	model: RenderModel;
 	state: "closed" | "opening" | "open";
-	position: MutNumArray;
 	openT0 = 0;
 	grid: Grid;
 	keyItems: Key[];
@@ -343,21 +381,21 @@ class Door {
 		this.grid.set(29, 27, true);
 	}
 
-	update(_dt: number) {
-		if (this.state === "closed") {
-			const allKeys = this.keyItems.every(function(key) { return key.found; });
-
-			if (allKeys) {
-				const playerPos = vec2.fromValues(this.player.position[0], this.player.position[2]);
-				const myPos = vec2.fromValues(this.position[0], this.position[2]);
-
-				if (vec2.distance(playerPos, myPos) < 2) {
-					this.state = "opening";
-					this.openT0 = App.tCur;
-				}
-			}
+	onCollide(_other: Collidable) {
+		if (this.state !== "closed") {
+			return;
 		}
-		else if (this.state === "opening") {
+
+		const allKeys = this.keyItems.every(key => key.found);
+		if (allKeys) {
+			this.state = "opening";
+			this.collisionMask = CollisionType.NONE;
+			this.openT0 = App.tCur;
+		}
+	}
+
+	update(_dt: number) {
+		if (this.state === "opening") {
 			const step = Math.max(0, Math.min(1, (App.tCur - this.openT0) / 4));
 			this.position[0] = 28.5 + ((Math.random() - 0.5) * 0.03);
 			this.position[1] = -3 * step;
@@ -380,9 +418,11 @@ class Door {
 
 
 class End {
-	type = "end";
-	position = [28.5, 29.5];
 	radius = 1;
+	collisionType = CollisionType.END;
+	collisionMask = CollisionType.PLAYER;
+	position = [28.5, 0, 29.5];
+
 	fadeSec = 4;
 	T = -1;
 	player: Player;
@@ -393,7 +433,7 @@ class End {
 
 	update(_dt: number) {
 		const playerPos = vec2.fromValues(this.player.position[0], this.player.position[2]);
-		if (vec2.distance(playerPos, this.position) < this.radius) {
+		if (vec2.distance(playerPos, [this.position[0], this.position[2]]) < this.radius) {
 			this.T = App.tCur;
 
 			const totalSeconds = this.T | 0;
@@ -410,9 +450,9 @@ class End {
 
 
 class Player {
-	type = "player";
-
 	radius = .25; // grid units
+	collisionType = CollisionType.PLAYER;
+	collisionMask = CollisionType.ENEMY;
 
 	model = renderer.createModel([assets.meshes["spookje"]]);
 	position = vec3.fromValues(0, 0.3, 0); // grid units
@@ -434,8 +474,9 @@ class Player {
 		vec3.set(this.position, x, this.position[1], z);
 	}
 
-	die() {
+	onCollide(_other: Collidable) {
 		if (this.dieT < 0) {
+			console.info("Player was eaten by Abomination");
 			this.dieT = App.tCur;
 		}
 	}
@@ -512,7 +553,12 @@ class Player {
 
 
 class Abomination {
-	type = "abomination";
+	radius = 1.4;
+	collisionType = CollisionType.ENEMY;
+	collisionMask = CollisionType.NONE;
+
+	grid: Grid;
+
 	model = renderer.createModel([assets.meshes["pac1"], assets.meshes["pac2"]], assets.textures["crackpac"]);
 	phase = "move";
 	nextDir: Direction = "north";
@@ -520,12 +566,10 @@ class Abomination {
 	lastStepT = 0;
 	stepDuration = 0.33;
 	turnDuration = 0.6;
-	radius = 1.4;
 	rotAxis = vec3.fromValues(0, 1, 0);
 	direction: Direction;
+	position: NumArray;
 	pathPos: NumArray;
-	grid: Grid;
-	player: Player;
 
 	static spawnData: { direction: Direction, pathPos: number[] }[] = [
 		// { direction: "north", pathPos: [43, 18] },
@@ -548,12 +592,12 @@ class Abomination {
 		east: [1, 0]
 	};
 
-	constructor(index: number, grid: Grid, player: Player) {
+	constructor(index: number, grid: Grid) {
 		this.grid = grid;
-		this.player = player;
 		this.model.setUniformScale(1.25);
 		this.direction = Abomination.spawnData[index].direction;
 		this.pathPos = vec2.clone(Abomination.spawnData[index].pathPos);
+		this.position = [this.pathPos[0], 0, this.pathPos[1]];
 	}
 
 	update(_dt: number) {
@@ -565,10 +609,10 @@ class Abomination {
 				const dirVec3 = vec3.fromValues(dirVec2[0], 0, dirVec2[1]);
 
 				const moveOffset = vec3.scale([0, 0, 0], dirVec3, this.pathStep / 2);
-				const visualPos = vec3.set([0, 0, 0], this.pathPos[0] + 0.5, 0, this.pathPos[1] + 0.5);
-				vec3.add(visualPos, visualPos, moveOffset);
+				vec3.set(this.position, this.pathPos[0] + 0.5, 0, this.pathPos[1] + 0.5);
+				vec3.add(this.position, this.position, moveOffset);
 
-				this.model.setPosition(visualPos);
+				this.model.setPosition(this.position);
 				this.model.setRotation(this.rotAxis, Abomination.rotations[this.direction]);
 
 				// moved 1 full tile
@@ -609,13 +653,6 @@ class Abomination {
 				this.lastStepT = App.tCur;
 			}
 		}
-
-		// -- check collisions against player
-		const playerPos = vec2.fromValues(this.player.position[0], this.player.position[2]);
-		const maxRadius = Math.max(this.radius, this.player.radius);
-		if (vec2.distance(playerPos, this.pathPos) < maxRadius) {
-			this.player.die();
-		}
 	}
 
 	draw(pass: RenderPass) {
@@ -645,19 +682,21 @@ class GameScene extends Scene {
 
 		this.camera = this.addEntity(new FixedCamera(canvas, mapData.cameras, this.player, this.grid));
 
-		this.keyItems.push(this.addEntity(new Key(0, this.player)));
-		this.keyItems.push(this.addEntity(new Key(1, this.player)));
-		this.keyItems.push(this.addEntity(new Key(2, this.player)));
-		this.keyItems.push(this.addEntity(new Key(3, this.player)));
+		this.keyItems.push(this.addEntity(new Key(0)));
+		this.keyItems.push(this.addEntity(new Key(1)));
+		this.keyItems.push(this.addEntity(new Key(2)));
+		this.keyItems.push(this.addEntity(new Key(3)));
 
 		this.door = this.addEntity(new Door(this.player, this.grid, this.keyItems));
 		this.end = this.addEntity(new End(this.player));
 
-		this.pacs.push(this.addEntity(new Abomination(0, this.grid, this.player)));
-		this.pacs.push(this.addEntity(new Abomination(1, this.grid, this.player)));
-		this.pacs.push(this.addEntity(new Abomination(2, this.grid, this.player)));
-		this.pacs.push(this.addEntity(new Abomination(3, this.grid, this.player)));
-		this.pacs.push(this.addEntity(new Abomination(4, this.grid, this.player)));
+		this.pacs.push(this.addEntity(new Abomination(0, this.grid)));
+		this.pacs.push(this.addEntity(new Abomination(1, this.grid)));
+		this.pacs.push(this.addEntity(new Abomination(2, this.grid)));
+		this.pacs.push(this.addEntity(new Abomination(3, this.grid)));
+		this.pacs.push(this.addEntity(new Abomination(4, this.grid)));
+
+		console.info("COLL", this.collidables);
 	}
 
 	show() {
