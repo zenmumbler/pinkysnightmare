@@ -12,8 +12,7 @@ import { loadObjFile } from "./objloader.js";
 import { Grid, Direction } from "./grid";
 import { Input, KEY_A, KEY_D, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_S, KEY_UP, KEY_W } from "./input";
 
-interface State {
-	// assets and render stuff
+interface Assets {
 	meshes: Record<string, RenderMesh>;
 	textures: Record<string, RenderTexture>;
 	mapModel: RenderModel;
@@ -22,7 +21,7 @@ interface State {
 	fogLimits: Float32Array;
 }
 
-let state: State;
+let assets: Assets;
 let renderer: Renderer;
 const bird = true;
 
@@ -137,13 +136,13 @@ class FixedCamera {
 		this.projectionMatrix = mat4.create();
 		if (bird) {
 			mat4.perspective(this.projectionMatrix, deg2rad(65), w / h, 1, 100.0);
-			state.fogLimits[0] = 100.0;
-			state.fogLimits[1] = 1000.0;
+			assets.fogLimits[0] = 100.0;
+			assets.fogLimits[1] = 1000.0;
 		}
 		else {
 			mat4.perspective(this.projectionMatrix, deg2rad(65), w / h, 0.05, 25.0);
-			state.fogLimits[0] = 2.0;
-			state.fogLimits[1] = 8.0;
+			assets.fogLimits[0] = 2.0;
+			assets.fogLimits[1] = 8.0;
 		}
 		this.viewMatrix = mat4.create();
 		this.fixedPoints = fixedPoints;
@@ -228,8 +227,8 @@ class Key {
 	constructor(index: number, player: Player) {
 		this.player = player;
 
-		this.keyModel = renderer.createModel([state.meshes["key"]]);
-		this.lockModel = renderer.createModel([state.meshes["lock"]]);
+		this.keyModel = renderer.createModel([assets.meshes["key"]]);
+		this.lockModel = renderer.createModel([assets.meshes["lock"]]);
 		this.index = index;
 		this.found = false;
 		this.keyPosition = vec3.create();
@@ -282,11 +281,11 @@ class Key {
 	draw(pass: RenderPass) {
 		if (! this.found) {
 			this.keyModel.setRotation(this.rotAxis, App.tCur * 1.3);
-			pass.draw({ model: this.keyModel, program: state.modelProgram });
+			pass.draw({ model: this.keyModel, program: assets.modelProgram });
 
 			const lrt = this.lockRotMax * Math.sin(App.tCur * 2);
 			this.lockModel.setRotation(this.lockRotAxis, lrt);
-			pass.draw({ model: this.lockModel, program: state.modelProgram });
+			pass.draw({ model: this.lockModel, program: assets.modelProgram });
 		}
 	}
 }
@@ -307,8 +306,8 @@ class Door {
 		this.player = player;
 		this.grid = grid;
 		this.keyItems = keyItems;
-		this.mesh = state.meshes.door;
-		this.model = renderer.createModel([this.mesh], state.textures["door"]);
+		this.mesh = assets.meshes.door;
+		this.model = renderer.createModel([this.mesh], assets.textures["door"]);
 
 		this.state = "closed";
 
@@ -355,7 +354,7 @@ class Door {
 	}
 
 	draw(pass: RenderPass) {
-		pass.draw({ model: this.model, program: state.texturedProgram });
+		pass.draw({ model: this.model, program: assets.texturedProgram });
 	}
 }
 
@@ -395,7 +394,7 @@ class Player {
 
 	radius = .25; // grid units
 
-	model = renderer.createModel([state.meshes["spookje"]]);
+	model = renderer.createModel([assets.meshes["spookje"]]);
 	position = vec3.fromValues(0, 0.3, 0); // grid units
 	viewAngle = Math.PI / -2; // radians
 	turnSpeed = Math.PI; // radians / sec
@@ -486,14 +485,14 @@ class Player {
 	draw(pass: RenderPass) {
 		this.model.setPosition(this.position);
 		this.model.setRotation(this.rotAxis, -this.viewAngle);
-		pass.draw({ model: this.model, program: state.modelProgram });
+		pass.draw({ model: this.model, program: assets.modelProgram });
 	}
 }
 
 
 class Abomination {
 	type = "abomination";
-	model = renderer.createModel([state.meshes["pac1"], state.meshes["pac2"]], state.textures["crackpac"]);
+	model = renderer.createModel([assets.meshes["pac1"], assets.meshes["pac2"]], assets.textures["crackpac"]);
 	phase = "move";
 	nextDir: Direction = "north";
 	pathStep = 0;
@@ -599,7 +598,7 @@ class Abomination {
 	}
 
 	draw(pass: RenderPass) {
-		pass.draw({ model: this.model, program: state.texturedProgram, meshIndex: 1 - (this.pathStep & 1) });
+		pass.draw({ model: this.model, program: assets.texturedProgram, meshIndex: 1 - (this.pathStep & 1) });
 	}
 }
 
@@ -650,10 +649,10 @@ class GameScene extends Scene {
 
 	draw() {
 		const { camera } = this;
-		const pass = renderer.createPass(camera.projectionMatrix, camera.viewMatrix, state.fogLimits);
+		const pass = renderer.createPass(camera.projectionMatrix, camera.viewMatrix, assets.fogLimits);
 
 		// -- PLAIN MODELS
-		pass.draw({ model: state.mapModel, program: state.modelProgram });
+		pass.draw({ model: assets.mapModel, program: assets.modelProgram });
 		this.player.draw(pass);
 		this.keyItems.forEach(function(key) { key.draw(pass); });
 
@@ -764,42 +763,42 @@ const App = new Application();
 // ---------
 
 async function init() {
-	state = {
+	assets = {
 		textures: {},
 		meshes: {},
 		fogLimits: new Float32Array(2)
-	} as any as State;
+	} as any as Assets;
 
 	const canvas = document.querySelector("canvas")!;
 	renderer = new WebGLRenderer();
 	await renderer.setup(canvas);
 
-	state.modelProgram = renderer.createProgram("standard");
-	state.texturedProgram = renderer.createProgram("textured");
+	assets.modelProgram = renderer.createProgram("standard");
+	assets.texturedProgram = renderer.createProgram("textured");
 
 	genMapMesh(renderer).then(async function(mapData) {
-		state.mapModel = renderer.createModel([mapData.mesh]);
+		assets.mapModel = renderer.createModel([mapData.mesh]);
 
-		state.meshes["door"] = renderer.createMesh(makeDoorGeometry(mapData.cornerColors));
+		assets.meshes["door"] = renderer.createMesh(makeDoorGeometry(mapData.cornerColors));
 
-		state.textures["door"] = await renderer.createTexture("assets/doortex.png");
-		state.textures["crackpac"] = await renderer.createTexture("assets/crackpac.png");
+		assets.textures["door"] = await renderer.createTexture("assets/doortex.png");
+		assets.textures["crackpac"] = await renderer.createTexture("assets/crackpac.png");
 
 		const pacColor = u8Color(213, 215, 17);
 		const pac1Geom = await loadObjFile("assets/pac1.obj", pacColor);
-		state.meshes["pac1"] = renderer.createMesh(pac1Geom);
+		assets.meshes["pac1"] = renderer.createMesh(pac1Geom);
 
 		const pac2Geom = await loadObjFile("assets/pac2.obj", pacColor);
-		state.meshes["pac2"] = renderer.createMesh(pac2Geom);
+		assets.meshes["pac2"] = renderer.createMesh(pac2Geom);
 
 		const keyGeom = await loadObjFile("assets/key.obj", u8Color(201, 163, 85));
-		state.meshes["key"] = renderer.createMesh(keyGeom);
+		assets.meshes["key"] = renderer.createMesh(keyGeom);
 
 		const lockGeom = await loadObjFile("assets/lock.obj", u8Color(0x66, 0x77, 0x88));
-		state.meshes["lock"] = renderer.createMesh(lockGeom);
+		assets.meshes["lock"] = renderer.createMesh(lockGeom);
 
 		const spookjeGeom = await loadObjFile("assets/spookje.obj", u8Color(255, 184, 221));
-		state.meshes["spookje"] = renderer.createMesh(spookjeGeom);
+		assets.meshes["spookje"] = renderer.createMesh(spookjeGeom);
 
 		gameScene = new GameScene(canvas, mapData);
 		titleScreen = new TitleScreen();
