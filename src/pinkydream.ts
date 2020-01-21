@@ -181,6 +181,7 @@ class Maze {
 class FixedCamera {
 	projectionMatrix: Float32Array;
 	viewMatrix: Float32Array;
+
 	fixedPoints: CameraPoint[];
 	player: Player;
 	grid: Grid;
@@ -274,13 +275,28 @@ class Key {
 
 	keyModel: RenderModel;
 	lockModel: RenderModel;
-	index: number;
+	
 	found: boolean;
+
+	index: number;
 	lockPosition: NumArray;
 	rotAxis: NumArray;
 	lockRotAxis: NumArray;
 	lockRotMax: number;
 
+	static keyPositions = [
+		[4.5, .2, 8.5],
+		[52.5, .2, 8.5],
+		[4.5, .2, 48.5],
+		[52.5, .2, 48.5]
+	];
+
+	static lockPositions = [
+		[29.3, 2.3, 26.8],
+		[27.5, 2.3, 26.8],
+		[29.3, 0.6, 26.8],
+		[27.5, 0.6, 26.8]
+	];
 
 	constructor(index: number) {
 		this.keyModel = renderer.createModel([assets.meshes["key"]]);
@@ -298,24 +314,10 @@ class Key {
 		this.lockRotAxis = [0, 0, 1];
 		this.lockRotMax = Math.PI / 40;
 
-		const keyPositions = [
-			[4.5, .2, 8.5],
-			[52.5, .2, 8.5],
-			[4.5, .2, 48.5],
-			[52.5, .2, 48.5]
-		];
-
-		const lockPositions = [
-			[29.3, 2.3, 26.8],
-			[27.5, 2.3, 26.8],
-			[29.3, 0.6, 26.8],
-			[27.5, 0.6, 26.8]
-		];
-
-		vec3.copy(this.position, keyPositions[this.index]);
+		vec3.copy(this.position, Key.keyPositions[this.index]);
 		this.keyModel.setPosition(this.position);
 
-		vec3.copy(this.lockPosition, lockPositions[this.index]);
+		vec3.copy(this.lockPosition, Key.lockPositions[this.index]);
 		this.lockModel.setPosition(this.lockPosition);
 	}
 
@@ -352,27 +354,22 @@ class Door {
 	collisionMask = CollisionType.PLAYER;
 	position: MutNumArray;
 
-	mesh: RenderMesh;
 	model: RenderModel;
 	state: "closed" | "opening" | "open";
 	openT0 = 0;
+
 	grid: Grid;
 	keyItems: Key[];
-	player: Player;
 
-	constructor(player: Player, grid: Grid, keyItems: Key[]) {
-		this.player = player;
+	constructor(grid: Grid, keyItems: Key[]) {
 		this.grid = grid;
 		this.keyItems = keyItems;
-		this.mesh = assets.meshes.door;
-		this.model = renderer.createModel([this.mesh], assets.textures["door"]);
-
+		
 		this.state = "closed";
 
+		this.model = renderer.createModel([assets.meshes.door], assets.textures["door"]);
 		this.position = vec3.fromValues(28.5, 0, 27);
-
 		this.model.setUniformScale(1);
-
 		this.model.setPosition(this.position);
 
 		// block the home base
@@ -423,28 +420,17 @@ class End {
 	collisionMask = CollisionType.PLAYER;
 	position = [28.5, 0, 29.5];
 
-	fadeSec = 4;
-	T = -1;
-	player: Player;
+	onCollide(_other: Collidable) {
+		this.collisionMask = CollisionType.NONE;
 
-	constructor(player: Player) {
-		this.player = player;
-	}
+		const totalSeconds = App.tCur | 0;
+		const minutes = (totalSeconds / 60) | 0;
+		const seconds = totalSeconds - (minutes * 60);
 
-	update(_dt: number) {
-		const playerPos = vec2.fromValues(this.player.position[0], this.player.position[2]);
-		if (vec2.distance(playerPos, [this.position[0], this.position[2]]) < this.radius) {
-			this.T = App.tCur;
+		$1("#minutes").textContent = "" + minutes;
+		$1("#seconds").textContent = "" + seconds;
 
-			const totalSeconds = this.T | 0;
-			const minutes = (totalSeconds / 60) | 0;
-			const seconds = totalSeconds - (minutes * 60);
-
-			$1("#minutes").textContent = "" + minutes;
-			$1("#seconds").textContent = "" + seconds;
-
-			App.setScene(victoryScreen);
-		}
+		App.setScene(victoryScreen);
 	}
 }
 
@@ -455,7 +441,7 @@ class Player {
 	collisionMask = CollisionType.ENEMY;
 
 	model = renderer.createModel([assets.meshes["spookje"]]);
-	position = vec3.fromValues(0, 0.3, 0); // grid units
+	position = vec3.fromValues(28.5, 0.3, 25); // grid units
 	viewAngle = Math.PI / -2; // radians
 	turnSpeed = Math.PI; // radians / sec
 	speed = 2.3; // grid units / sec
@@ -556,10 +542,11 @@ class Abomination {
 	radius = 1.4;
 	collisionType = CollisionType.ENEMY;
 	collisionMask = CollisionType.NONE;
+	position: NumArray;
+	model = renderer.createModel([assets.meshes["pac1"], assets.meshes["pac2"]], assets.textures["crackpac"]);
 
 	grid: Grid;
 
-	model = renderer.createModel([assets.meshes["pac1"], assets.meshes["pac2"]], assets.textures["crackpac"]);
 	phase = "move";
 	nextDir: Direction = "north";
 	pathStep = 0;
@@ -568,7 +555,6 @@ class Abomination {
 	turnDuration = 0.6;
 	rotAxis = vec3.fromValues(0, 1, 0);
 	direction: Direction;
-	position: NumArray;
 	pathPos: NumArray;
 
 	static spawnData: { direction: Direction, pathPos: number[] }[] = [
@@ -664,37 +650,31 @@ class Abomination {
 
 class GameScene extends Scene {
 	keyItems: Key[] = [];
-	pacs: Abomination[] = [];
-	player: Player;
-	door: Door;
-	end: End;
-	camera: FixedCamera;
-	grid: Grid;
 
 	constructor(canvas: HTMLCanvasElement, mapData: MapData) {
 		super();
 
-		this.grid = new Grid(mapData.gridW, mapData.gridH, mapData.grid, mapData.path);
+		const grid = new Grid(mapData.gridW, mapData.gridH, mapData.grid, mapData.path);
 		this.addEntity(new Maze());
 
-		this.player = this.addEntity(new Player(this.grid));
-		this.player.moveTo2D(28.5, 25);
+		const player = this.addEntity(new Player(grid));
 
-		this.camera = this.addEntity(new FixedCamera(canvas, mapData.cameras, this.player, this.grid));
+		this.addEntity(new FixedCamera(canvas, mapData.cameras, player, grid));
 
 		this.keyItems.push(this.addEntity(new Key(0)));
 		this.keyItems.push(this.addEntity(new Key(1)));
 		this.keyItems.push(this.addEntity(new Key(2)));
 		this.keyItems.push(this.addEntity(new Key(3)));
 
-		this.door = this.addEntity(new Door(this.player, this.grid, this.keyItems));
-		this.end = this.addEntity(new End(this.player));
+		this.addEntity(new Door(grid, this.keyItems));
+		this.addEntity(new End());
 
-		this.pacs.push(this.addEntity(new Abomination(0, this.grid)));
-		this.pacs.push(this.addEntity(new Abomination(1, this.grid)));
-		this.pacs.push(this.addEntity(new Abomination(2, this.grid)));
-		this.pacs.push(this.addEntity(new Abomination(3, this.grid)));
-		this.pacs.push(this.addEntity(new Abomination(4, this.grid)));
+		this.addEntity(new Abomination(0, grid));
+		this.addEntity(new Abomination(1, grid));
+		this.addEntity(new Abomination(2, grid));
+		this.addEntity(new Abomination(3, grid));
+		this.addEntity(new Abomination(4, grid));
+	}
 
 	update(dt: number) {
 		super.update(dt);
