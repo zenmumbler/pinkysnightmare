@@ -8,7 +8,7 @@
         "noEmitOnError": true,
 
 		"strict": true,
-        "noUnusedLocals": true,
+        "noUnusedLocals": false,
         "noUnusedParameters": true,
 		"forceConsistentCasingInFileNames": true,
         "noFallthroughCasesInSwitch": false,

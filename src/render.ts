@@ -4,6 +4,7 @@ import { Geometry, VertexAttributeRole } from "stardazed/geometry";
 import { assert } from "./util";
 import { loadImageData } from "./asset";
 
+/** Transform and RenderMesh in one */
 export class RenderModel {
 	private meshes: RenderMesh[];
 	texture: RenderTexture | undefined;

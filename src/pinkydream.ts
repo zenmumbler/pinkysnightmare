@@ -33,12 +33,12 @@ interface State {
 	mapModel: RenderModel;
 	modelProgram: RenderProgram;
 	texturedProgram: RenderProgram;
-	fogLimits: Float32Array
+	fogLimits: Float32Array;
 }
 
 let state: State;
 let renderer: Renderer;
-let bird = false;
+const bird = false;
 
 let mode = "title";
 
