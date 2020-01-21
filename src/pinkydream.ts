@@ -90,19 +90,25 @@ function isCollidable(e: any): e is Collidable {
 		&& typeof e.radius === "number";
 }
 
-const updatables: Updatable[] = [];
-const drawables: Drawable[] = [];
-const collidables: Collidable[] = [];
+class Scene {
+	updatables: Updatable[] = [];
+	drawables: Drawable[] = [];
+	collidables: Collidable[] = [];
+	camera: Camera | undefined;
 
-function addEntity<E extends Entity>(e: E) {
-	if (isUpdatable(e)) {
-		updatables.push(e);
-	}
-	if (isDrawable(e)) {
-		drawables.push(e);
-	}
-	if (isCollidable(e)) {
-		collidables.push(e);
+	addEntity<E extends Entity>(e: E) {
+		if (isCamera(e)) {
+			this.camera = e;
+		}
+		if (isUpdatable(e)) {
+			this.updatables.push(e);
+		}
+		if (isDrawable(e)) {
+			this.drawables.push(e);
+		}
+		if (isCollidable(e)) {
+			this.collidables.push(e);
+		}
 	}
 }
 
