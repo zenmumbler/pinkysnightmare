@@ -23,7 +23,7 @@ interface Assets {
 
 let assets: Assets;
 let renderer: Renderer;
-const bird = true;
+const bird = false;
 
 // ----- Sort of an Object ECS
 
@@ -101,12 +101,24 @@ class Scene {
 		return e;
 	}
 
-	update(_dt: number) {
-		// update all elements of this scene
+	update(dt: number) {
+		for (const u of this.updatables) {
+			u.update(dt);
+		}
 	}
 
 	draw() {
-		// render this scene
+		const { camera } = this;
+		if (! camera) {
+			return;
+		}
+		const pass = renderer.createPass(camera.projectionMatrix, camera.viewMatrix, assets.fogLimits);
+
+		for (const d of this.drawables) {
+			d.draw(pass);
+		}
+
+		pass.finish();
 	}
 
 	show() {
@@ -645,31 +657,6 @@ class GameScene extends Scene {
 		this.pacs.push(this.addEntity(new Abomination(2, this.grid, this.player)));
 		this.pacs.push(this.addEntity(new Abomination(3, this.grid, this.player)));
 		this.pacs.push(this.addEntity(new Abomination(4, this.grid, this.player)));
-	}
-
-	update(dt: number) {
-		this.end.update(dt);
-		this.camera.update(dt);
-		this.player.update(dt);
-		this.keyItems.forEach(function(key) { key.update(dt); });
-		this.door.update(dt);
-		this.pacs.forEach(function(pac) { pac.update(dt); });
-	}
-
-	draw() {
-		const { camera } = this;
-		const pass = renderer.createPass(camera.projectionMatrix, camera.viewMatrix, assets.fogLimits);
-
-		// -- PLAIN MODELS
-		pass.draw({ model: assets.mapModel, program: assets.modelProgram });
-		this.player.draw(pass);
-		this.keyItems.forEach(function(key) { key.draw(pass); });
-
-		// -- TEXTURED MODELS
-		this.door.draw(pass);
-		this.pacs.forEach(function(pac) { pac.draw(pass); });
-
-		pass.finish();
 	}
 
 	show() {
