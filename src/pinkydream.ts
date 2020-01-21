@@ -3,7 +3,7 @@
 // (c) 2015-2020 by Arthur Langereis — @zenmumbler
 
 import { deg2rad, intRandom, clamp01f } from "stardazed/core";
-import { vec2, vec3, mat2, mat4 } from "stardazed/vector";
+import { vec2, vec3, mat2, mat4, quat } from "stardazed/vector";
 import { $1, on, show, hide } from "./util.js";
 import { u8Color, makeDoorGeometry } from "./asset.js";
 import { Renderer, RenderTexture, RenderMesh, RenderModel, WebGLRenderer, RenderProgram, RenderPass } from "./render";
@@ -30,14 +30,17 @@ interface Entity {
 	// name?: string;
 }
 
-interface Positionable {
+interface Transformable {
 	readonly position: NumArray;
+	readonly rotation: NumArray;
+	readonly scale: NumArray;
 }
 
-function isPositionable(e: any): e is Positionable {
+function isTransformable(e: any): e is Transformable {
 	return e && typeof e === "object" &&
-		e.position !== undefined &&
-		e.position.length === 3;
+		e.position !== undefined && e.position.length === 3 &&
+		e.rotation !== undefined && e.rotation.length === 4 &&
+		e.scale !== undefined && e.scale.length === 3;
 }
 
 interface Camera {
@@ -71,7 +74,7 @@ interface Collidable {
 	readonly radius: number;
 	readonly collisionType: number;
 	readonly collisionMask: number;
-	onCollide?(other: Collidable & Positionable): void;
+	onCollide?(other: Collidable & Transformable): void;
 }
 
 function isCollidable(e: any): e is Collidable {
@@ -86,7 +89,7 @@ class Scene {
 	entities: Entity[] = [];
 	updatables: Updatable[] = [];
 	drawables: Drawable[] = [];
-	collidables: (Collidable & Positionable)[] = [];
+	collidables: (Collidable & Transformable)[] = [];
 	camera: Camera | undefined;
 
 	addEntity<E extends Entity>(e: E): E {
@@ -101,7 +104,7 @@ class Scene {
 		if (isDrawable(e)) {
 			this.drawables.push(e);
 		}
-		if (isCollidable(e) && isPositionable(e)) {
+		if (isCollidable(e) && isTransformable(e)) {
 			this.collidables.push(e);
 		}
 		return e;
@@ -172,6 +175,9 @@ const enum CollisionType {
 }
 
 class Maze {
+	position = [0, 0, 0];
+	rotation = quat.create();
+	scale = [1, 1, 1];
 	mapModel: RenderModel;
 
 	constructor(mapMesh: RenderMesh) {
@@ -277,17 +283,14 @@ class Key {
 	collisionType = CollisionType.KEY;
 	collisionMask = CollisionType.PLAYER;
 	position: NumArray;
-
-	keyModel: RenderModel;
-	lockModel: RenderModel;
+	rotation = quat.create();
+	scale = [0.25, 0.25, 0.25];
+	model = renderer.createModel([assets.meshes["key"]]);
 	
 	found: boolean;
-
 	index: number;
-	lockPosition: NumArray;
-	rotAxis: NumArray;
-	lockRotAxis: NumArray;
-	lockRotMax: number;
+
+	rotAxis = [0, 1, 0];
 
 	static keyPositions = [
 		[4.5, .2, 8.5],
@@ -296,34 +299,10 @@ class Key {
 		[52.5, .2, 48.5]
 	];
 
-	static lockPositions = [
-		[29.3, 2.3, 26.8],
-		[27.5, 2.3, 26.8],
-		[29.3, 0.6, 26.8],
-		[27.5, 0.6, 26.8]
-	];
-
 	constructor(index: number) {
-		this.keyModel = renderer.createModel([assets.meshes["key"]]);
-		this.lockModel = renderer.createModel([assets.meshes["lock"]]);
 		this.index = index;
 		this.found = false;
-		this.position = vec3.create();
-		this.lockPosition = vec3.create();
-
-		this.keyModel.setUniformScale(0.25);
-		this.lockModel.setUniformScale(0.005);
-
-		this.rotAxis = vec3.fromValues(0, 1, 0);
-
-		this.lockRotAxis = [0, 0, 1];
-		this.lockRotMax = Math.PI / 40;
-
-		vec3.copy(this.position, Key.keyPositions[this.index]);
-		this.keyModel.setPosition(this.position);
-
-		vec3.copy(this.lockPosition, Key.lockPositions[this.index]);
-		this.lockModel.setPosition(this.lockPosition);
+		this.position = vec3.copy(vec3.create(), Key.keyPositions[this.index]);
 	}
 
 	onCollide(_other: Collidable) {
@@ -339,15 +318,12 @@ class Key {
 			return;
 		}
 
-		this.keyModel.setRotation(this.rotAxis, App.tCur * 1.3);
-		const lrt = this.lockRotMax * Math.sin(App.tCur * 2);
-		this.lockModel.setRotation(this.lockRotAxis, lrt);
+		quat.setAxisAngle(this.rotation, this.rotAxis, App.tCur * 1.3);
 	}
 
 	draw(pass: RenderPass) {
 		if (! this.found) {
-			pass.draw({ model: this.keyModel, program: assets.modelProgram });
-			pass.draw({ model: this.lockModel, program: assets.modelProgram });
+			pass.draw({ model: this.model, program: assets.modelProgram });
 		}
 	}
 }
@@ -396,9 +372,11 @@ class Door {
 	radius = 2;
 	collisionType = CollisionType.END;
 	collisionMask = CollisionType.PLAYER;
-	position: MutNumArray;
+	position = [28.5, 0, 27];
+	rotation = quat.create();
+	scale = [1, 1, 1];
+	model = renderer.createModel([assets.meshes.door], assets.textures["door"]);
 
-	model: RenderModel;
 	state: "closed" | "opening" | "open";
 	openT0 = 0;
 
@@ -410,11 +388,6 @@ class Door {
 		this.keyItems = keyItems;
 		
 		this.state = "closed";
-
-		this.model = renderer.createModel([assets.meshes.door], assets.textures["door"]);
-		this.position = vec3.fromValues(28.5, 0, 27);
-		this.model.setUniformScale(1);
-		this.model.setPosition(this.position);
 
 		// block the home base
 		this.grid.set(27, 27, true);
@@ -440,7 +413,6 @@ class Door {
 			const step = Math.max(0, Math.min(1, (App.tCur - this.openT0) / 4));
 			this.position[0] = 28.5 + ((Math.random() - 0.5) * 0.03);
 			this.position[1] = -3 * step;
-			this.model.setPosition(this.position);
 
 			if (step === 1) {
 				// unblock
@@ -463,6 +435,8 @@ class End {
 	collisionType = CollisionType.END;
 	collisionMask = CollisionType.PLAYER;
 	position = [28.5, 0, 29.5];
+	rotation = quat.create();
+	scale = [1, 1, 1];
 
 	onCollide(_other: Collidable) {
 		this.collisionMask = CollisionType.NONE;
@@ -483,9 +457,11 @@ class Player {
 	radius = .25; // grid units
 	collisionType = CollisionType.PLAYER;
 	collisionMask = CollisionType.ENEMY;
-
-	model = renderer.createModel([assets.meshes["spookje"]]);
 	position = vec3.fromValues(28.5, 0.3, 25); // grid units
+	rotation = quat.create();
+	scale = [0.25, 0.25, 0.25];
+	model = renderer.createModel([assets.meshes["spookje"]]);
+
 	viewAngle = Math.PI / -2; // radians
 	turnSpeed = Math.PI; // radians / sec
 	speed = 2.3; // grid units / sec
@@ -515,11 +491,15 @@ class Player {
 		if (this.dieT >= 0) {
 			const meltStep = (App.tCur - this.dieT) / 4;
 			const meltClamp = clamp01f(meltStep);
-			this.model.setScale(0.25 + meltClamp * .75, Math.max(0.1, 0.25 * Math.pow(1 - meltClamp, 2)), 0.25 + meltClamp * 0.75);
+			vec3.set(this.scale,
+				0.25 + meltClamp * .75,
+				Math.max(0.1, 0.25 * Math.pow(1 - meltClamp, 2)),
+				0.25 + meltClamp * 0.75
+			);
 
 			if (meltStep >= 2) {
 				// back to original position
-				this.model.setUniformScale(0.25);
+				vec3.set(this.scale, 0.25, 0.25, 0.25);
 				this.moveTo2D(28.5, 25);
 				this.viewAngle = Math.PI / -2; // radians
 				this.dieT = -1;
@@ -571,9 +551,7 @@ class Player {
 
 		// -- they all float down here
 		this.position[1] = 0.35 + 0.05 * Math.sin(App.tCur * 3);
-
-		this.model.setPosition(this.position);
-		this.model.setRotation(this.rotAxis, -this.viewAngle);
+		quat.setAxisAngle(this.rotation, this.rotAxis, -this.viewAngle);
 	}
 
 	draw(pass: RenderPass) {
@@ -587,6 +565,8 @@ class Abomination {
 	collisionType = CollisionType.ENEMY;
 	collisionMask = CollisionType.NONE;
 	position: NumArray;
+	rotation = quat.create();
+	scale = [1.25, 1.25, 1.25];
 	model = renderer.createModel([assets.meshes["pac1"], assets.meshes["pac2"]], assets.textures["crackpac"]);
 
 	grid: Grid;
@@ -624,7 +604,6 @@ class Abomination {
 
 	constructor(index: number, grid: Grid) {
 		this.grid = grid;
-		this.model.setUniformScale(1.25);
 		this.direction = Abomination.spawnData[index].direction;
 		this.pathPos = vec2.clone(Abomination.spawnData[index].pathPos);
 		this.position = [this.pathPos[0], 0, this.pathPos[1]];
@@ -642,8 +621,7 @@ class Abomination {
 				vec3.set(this.position, this.pathPos[0] + 0.5, 0, this.pathPos[1] + 0.5);
 				vec3.add(this.position, this.position, moveOffset);
 
-				this.model.setPosition(this.position);
-				this.model.setRotation(this.rotAxis, Abomination.rotations[this.direction]);
+				quat.setAxisAngle(this.rotation, this.rotAxis, Abomination.rotations[this.direction]);
 
 				// moved 1 full tile
 				if (this.pathStep === 2) {
@@ -674,7 +652,7 @@ class Abomination {
 				rotation -= Math.PI * 2;
 			}
 
-			this.model.setRotation(this.rotAxis, fromAngle + rotation * step);
+			quat.setAxisAngle(this.rotation, this.rotAxis, fromAngle + rotation * step);
 
 			if (step >= 1.0) {
 				this.phase = "move";
