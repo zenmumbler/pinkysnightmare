@@ -107,7 +107,7 @@ class Scene {
 		return e;
 	}
 
-	update() {
+	update(_dt: number) {
 		// update all elements of this scene
 	}
 
@@ -644,22 +644,13 @@ class GameScene extends Scene {
 		this.pacs.push(this.addEntity(new Abomination(4, this.grid, this.player)));
 	}
 
-	update() {
-		state.tCur = (Date.now() / 1000.0) - state.t0;
-		const dt = state.tCur - state.tLast;
-
+	update(dt: number) {
 		this.end.update(dt);
 		this.camera.update(dt);
 		this.player.update(dt);
 		this.keyItems.forEach(function(key) { key.update(dt); });
 		this.door.update(dt);
 		this.pacs.forEach(function(pac) { pac.update(dt); });
-
-		state.tLast = state.tCur;
-
-		if (Input.keys[32]) {
-			console.info(this.player.position);
-		}
 	}
 
 	draw() {
@@ -680,9 +671,6 @@ class GameScene extends Scene {
 
 	show() {
 		show("canvas");
-		state.t0 = Date.now() / 1000;
-		state.tCur = state.t0;
-		state.tLast = state.t0;
 	}
 
 	hide() {
@@ -739,6 +727,10 @@ function setScene(newScene: Scene | undefined) {
 		curScene.hide();
 	}
 	if (newScene) {
+		state.t0 = Date.now() / 1000;
+		state.tCur = state.t0;
+		state.tLast = state.t0;
+
 		newScene.show();
 	}
 	curScene = newScene;
@@ -746,8 +738,11 @@ function setScene(newScene: Scene | undefined) {
 
 function nextFrame() {
 	if (curScene) {
-		curScene.update();
+		state.tCur = (Date.now() / 1000.0) - state.t0;
+		const dt = state.tCur - state.tLast;
+		curScene.update(dt);
 		curScene.draw();
+		state.tLast = state.tCur;
 	}
 
 	if (Input.active) {
