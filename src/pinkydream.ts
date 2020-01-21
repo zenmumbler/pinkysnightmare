@@ -352,6 +352,45 @@ class Key {
 	}
 }
 
+class Lock {
+	position: NumArray;
+	rotation = quat.create();
+	scale = [0.05, 0.05, 0.05];
+	model: RenderModel;
+
+	key: Key;
+
+	rotAxis = [0, 0, 1];
+
+	static lockPositions = [
+		[29.3, 2.3, 26.8],
+		[27.5, 2.3, 26.8],
+		[29.3, 0.6, 26.8],
+		[27.5, 0.6, 26.8]
+	];
+
+	constructor(key: Key) {
+		this.key = key;
+		this.model = renderer.createModel([assets.meshes["lock"]]);
+		
+		this.position = Lock.lockPositions[this.key.index];
+		this.model.setUniformScale(0.005);
+	}
+
+	update(_dt: number) {
+		if (this.key.found) {
+			return;
+		}
+		const lrt = (Math.PI / 40) * Math.sin(App.tCur * 2);
+		quat.setAxisAngle(this.rotation, this.rotAxis, lrt);
+	}
+
+	draw(pass: RenderPass) {
+		if (! this.key.found) {
+			pass.draw({ model: this.model, program: assets.modelProgram });
+		}
+	}
+}
 
 class Door {
 	radius = 2;
@@ -666,10 +705,11 @@ class GameScene extends Scene {
 
 		this.addEntity(new FixedCamera(canvas, mapData.cameras, player, grid));
 
-		this.keyItems.push(this.addEntity(new Key(0)));
-		this.keyItems.push(this.addEntity(new Key(1)));
-		this.keyItems.push(this.addEntity(new Key(2)));
-		this.keyItems.push(this.addEntity(new Key(3)));
+		for (let ki = 0; ki < 4; ++ki) {
+			const key = this.addEntity(new Key(ki));
+			this.addEntity(new Lock(key));
+			this.keyItems.push(key);
+		}
 
 		this.addEntity(new Door(grid, this.keyItems));
 		this.addEntity(new End());
