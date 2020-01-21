@@ -13,11 +13,6 @@ import { Grid, Direction } from "./grid";
 import { Input, KEY_A, KEY_D, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_S, KEY_UP, KEY_W } from "./input";
 
 interface State {
-	// timing
-	t0: number;
-	tCur: number;
-	tLast: number;
-
 	// assets and render stuff
 	meshes: Record<string, RenderMesh>;
 	textures: Record<string, RenderTexture>;
@@ -286,10 +281,10 @@ class Key {
 
 	draw(pass: RenderPass) {
 		if (! this.found) {
-			this.keyModel.setRotation(this.rotAxis, state.tCur * 1.3);
+			this.keyModel.setRotation(this.rotAxis, App.tCur * 1.3);
 			pass.draw({ model: this.keyModel, program: state.modelProgram });
 
-			const lrt = this.lockRotMax * Math.sin(state.tCur * 2);
+			const lrt = this.lockRotMax * Math.sin(App.tCur * 2);
 			this.lockModel.setRotation(this.lockRotAxis, lrt);
 			pass.draw({ model: this.lockModel, program: state.modelProgram });
 		}
@@ -339,12 +334,12 @@ class Door {
 
 				if (vec2.distance(playerPos, myPos) < 2) {
 					this.state = "opening";
-					this.openT0 = state.tCur;
+					this.openT0 = App.tCur;
 				}
 			}
 		}
 		else if (this.state === "opening") {
-			const step = Math.max(0, Math.min(1, (state.tCur - this.openT0) / 4));
+			const step = Math.max(0, Math.min(1, (App.tCur - this.openT0) / 4));
 			this.position[0] = 28.5 + ((Math.random() - 0.5) * 0.03);
 			this.position[1] = -3 * step;
 			this.model.setPosition(this.position);
@@ -380,7 +375,7 @@ class End {
 	update(_dt: number) {
 		const playerPos = vec2.fromValues(this.player.position[0], this.player.position[2]);
 		if (vec2.distance(playerPos, this.position) < this.radius) {
-			this.T = state.tCur;
+			this.T = App.tCur;
 
 			const totalSeconds = this.T | 0;
 			const minutes = (totalSeconds / 60) | 0;
@@ -389,7 +384,7 @@ class End {
 			$1("#minutes").textContent = "" + minutes;
 			$1("#seconds").textContent = "" + seconds;
 
-			setScene(victoryScreen);
+			App.setScene(victoryScreen);
 		}
 	}
 }
@@ -422,13 +417,13 @@ class Player {
 
 	die() {
 		if (this.dieT < 0) {
-			this.dieT = state.tCur;
+			this.dieT = App.tCur;
 		}
 	}
 
 	update(dt: number) {
 		if (this.dieT >= 0) {
-			const meltStep = (state.tCur - this.dieT) / 4;
+			const meltStep = (App.tCur - this.dieT) / 4;
 			const meltClamp = clamp01f(meltStep);
 			this.model.setScale(0.25 + meltClamp * .75, Math.max(0.1, 0.25 * Math.pow(1 - meltClamp, 2)), 0.25 + meltClamp * 0.75);
 
@@ -485,7 +480,7 @@ class Player {
 		}
 
 		// -- they all float down here
-		this.position[1] = 0.35 + 0.05 * Math.sin(state.tCur * 3);
+		this.position[1] = 0.35 + 0.05 * Math.sin(App.tCur * 3);
 	}
 
 	draw(pass: RenderPass) {
@@ -543,9 +538,9 @@ class Abomination {
 
 	update(_dt: number) {
 		if (this.phase === "move") {
-			if (state.tCur - this.lastStepT > this.stepDuration) {
+			if (App.tCur - this.lastStepT > this.stepDuration) {
 				this.pathStep++;
-				this.lastStepT = state.tCur;
+				this.lastStepT = App.tCur;
 				const dirVec2 = Abomination.directionVecs[this.direction];
 				const dirVec3 = vec3.fromValues(dirVec2[0], 0, dirVec2[1]);
 
@@ -572,7 +567,7 @@ class Abomination {
 			}
 		} // move
 		else if (this.phase === "turn") {
-			let step = Math.max(0, Math.min(1, (state.tCur - this.lastStepT) / this.turnDuration));
+			let step = Math.max(0, Math.min(1, (App.tCur - this.lastStepT) / this.turnDuration));
 			step = step * step;
 
 			const fromAngle = Abomination.rotations[this.direction];
@@ -591,7 +586,7 @@ class Abomination {
 				this.phase = "move";
 				this.direction = this.nextDir;
 				// this.nextDir = "";
-				this.lastStepT = state.tCur;
+				this.lastStepT = App.tCur;
 			}
 		}
 
@@ -682,7 +677,7 @@ class TitleScreen extends Scene {
 	constructor() {
 		super();
 		on("#run", "click", function() {
-			setScene(gameScene);
+			App.setScene(gameScene);
 		});
 	}
 
@@ -714,48 +709,57 @@ class VictoryScreen extends Scene {
 
 // ---------
 
-let curScene: Scene | undefined;
 let gameScene: GameScene;
 let titleScreen: TitleScreen;
 let victoryScreen: VictoryScreen;
 
-function setScene(newScene: Scene | undefined) {
-	if (newScene === curScene) {
-		return;
-	}
-	if (curScene) {
-		curScene.hide();
-	}
-	if (newScene) {
-		state.t0 = Date.now() / 1000;
-		state.tCur = state.t0;
-		state.tLast = state.t0;
+class Application {
+	curScene: Scene | undefined;
+	t0 = 0;
+	tLast = 0;
+	tCur = 0;
 
-		newScene.show();
+	constructor() {
+		Input.onActiveChange = (active) => {
+			if (active) {
+				this.tLast = (Date.now() / 1000.0) - this.t0;
+				this.nextFrame();
+			}
+		};
 	}
-	curScene = newScene;
+
+	setScene(newScene: Scene | undefined) {
+		if (newScene === this.curScene) {
+			return;
+		}
+		if (this.curScene) {
+			this.curScene.hide();
+		}
+		if (newScene) {
+			this.t0 = Date.now() / 1000;
+			this.tLast = this.t0;
+			this.tCur = this.t0;
+
+			newScene.show();
+		}
+		this.curScene = newScene;
+	}
+
+	nextFrame() {
+		if (this.curScene) {
+			App.tCur = (Date.now() / 1000.0) - this.t0;
+			const dt = this.tCur - this.tLast;
+			this.curScene.update(dt);
+			this.curScene.draw();
+			this.tLast = this.tCur;
+		}
+
+		if (Input.active) {
+			requestAnimationFrame(() => this.nextFrame());
+		}
+	}
 }
-
-function nextFrame() {
-	if (curScene) {
-		state.tCur = (Date.now() / 1000.0) - state.t0;
-		const dt = state.tCur - state.tLast;
-		curScene.update(dt);
-		curScene.draw();
-		state.tLast = state.tCur;
-	}
-
-	if (Input.active) {
-		requestAnimationFrame(nextFrame);
-	}
-}
-
-Input.onActiveChange = (active) => {
-	if (active) {
-		state.tLast = (Date.now() / 1000.0) - state.t0;
-		nextFrame();
-	}
-};
+const App = new Application();
 
 // ---------
 
@@ -801,8 +805,8 @@ async function init() {
 		titleScreen = new TitleScreen();
 		victoryScreen = new VictoryScreen();
 
-		setScene(titleScreen);
-		nextFrame();
+		App.setScene(titleScreen);
+		App.nextFrame();
 	});
 }
 
