@@ -17,12 +17,10 @@ interface Assets {
 	textures: Record<string, RenderTexture>;
 	modelProgram: RenderProgram;
 	texturedProgram: RenderProgram;
-	fogLimits: Float32Array;
 }
 
 let assets: Assets;
 let renderer: Renderer;
-const bird = false;
 
 // ----- Sort of an Object ECS
 
@@ -47,12 +45,14 @@ function isTransformable(e: any): e is Transformable {
 interface Camera {
 	readonly projectionMatrix: Float32Array;
 	readonly viewMatrix: Float32Array;
+	readonly fogLimits: Float32Array;
 }
 
 function isCamera(e: any): e is Camera {
 	return e && typeof e === "object" &&
 		e.projectionMatrix instanceof Float32Array &&
-		e.viewMatrix instanceof Float32Array;
+		e.viewMatrix instanceof Float32Array &&
+		e.fogLimits instanceof Float32Array;
 }
 
 interface Updatable {
@@ -96,14 +96,15 @@ class Scene {
 	updatables: Updatable[] = [];
 	drawables: (Drawable & Transformable)[] = [];
 	collidables: (Collidable & Transformable)[] = [];
-	camera: Camera | undefined;
+	cameras: Camera[] = [];
 	matrices: Float32Array[] = [];
+	curCamera: Camera | undefined;
 
 	addEntity<E extends Entity>(e: E): E {
 		this.entities.push(e);
 
 		if (isCamera(e)) {
-			this.camera = e;
+			this.cameras.push(e);
 		}
 		if (isUpdatable(e)) {
 			this.updatables.push(e);
@@ -151,11 +152,11 @@ class Scene {
 	}
 
 	draw() {
-		const { camera } = this;
-		if (! camera) {
+		const { curCamera } = this;
+		if (! curCamera) {
 			return;
 		}
-		const pass = renderer.createPass(camera.projectionMatrix, camera.viewMatrix, assets.fogLimits);
+		const pass = renderer.createPass(curCamera.projectionMatrix, curCamera.viewMatrix, curCamera.fogLimits);
 
 		for (const d of this.drawables) {
 			pass.draw({
@@ -201,9 +202,26 @@ class Maze {
 	}
 }
 
+class TopDownCamera {
+	projectionMatrix: Float32Array;
+	viewMatrix: Float32Array;
+	fogLimits = new Float32Array([100.0, 1000.0]);
+
+	constructor(canvas: HTMLCanvasElement) {
+		const w = canvas.width;
+		const h = canvas.height;
+		this.projectionMatrix = mat4.create();
+		this.viewMatrix = mat4.create();
+
+		mat4.lookAt(this.viewMatrix, [28.5, 60, 32.5], [28.5, 0, 32.5], [0, 0, 1]);
+		mat4.perspective(this.projectionMatrix, deg2rad(65), w / h, 1, 100.0);
+	}
+}
+
 class FixedCamera {
 	projectionMatrix: Float32Array;
 	viewMatrix: Float32Array;
+	fogLimits = new Float32Array([2.0, 8.0]);
 
 	fixedPoints: CameraPoint[];
 	player: Player;
@@ -217,16 +235,7 @@ class FixedCamera {
 		const w = canvas.width;
 		const h = canvas.height;
 		this.projectionMatrix = mat4.create();
-		if (bird) {
-			mat4.perspective(this.projectionMatrix, deg2rad(65), w / h, 1, 100.0);
-			assets.fogLimits[0] = 100.0;
-			assets.fogLimits[1] = 1000.0;
-		}
-		else {
-			mat4.perspective(this.projectionMatrix, deg2rad(65), w / h, 0.05, 25.0);
-			assets.fogLimits[0] = 2.0;
-			assets.fogLimits[1] = 8.0;
-		}
+		mat4.perspective(this.projectionMatrix, deg2rad(65), w / h, 0.05, 25.0);
 		this.viewMatrix = mat4.create();
 	}
 
@@ -281,12 +290,7 @@ class FixedCamera {
 			playerPos[1] = 0.3; // player height oscillates but we don't want a wobbly camera
 		}
 
-		if (bird) {
-			mat4.lookAt(this.viewMatrix, [28.5, 60, 32.5], [28.5, 0, 32.5], [0, 0, 1]);
-		}
-		else {
-			mat4.lookAt(this.viewMatrix, camPos, playerPos, [0, 1, 0]);
-		}
+		mat4.lookAt(this.viewMatrix, camPos, playerPos, [0, 1, 0]);
 	}
 }
 
@@ -303,7 +307,7 @@ class Key {
 	found: boolean;
 	index: number;
 
-	rotAxis = [0, 1, 0];
+	static rotAxis = [0, 1, 0];
 
 	static keyPositions = [
 		[4.5, .2, 8.5],
@@ -331,7 +335,7 @@ class Key {
 			return;
 		}
 
-		quat.setAxisAngle(this.rotation, this.rotAxis, App.tCur * 1.3);
+		quat.setAxisAngle(this.rotation, Key.rotAxis, App.tCur * 1.3);
 	}
 }
 
@@ -344,7 +348,7 @@ class Lock {
 
 	key: Key;
 
-	rotAxis = [0, 0, 1];
+	static rotAxis = [0, 0, 1];
 
 	static lockPositions = [
 		[29.3, 2.3, 26.8],
@@ -363,7 +367,7 @@ class Lock {
 			return;
 		}
 		const lrt = (Math.PI / 40) * Math.sin(App.tCur * 2);
-		quat.setAxisAngle(this.rotation, this.rotAxis, lrt);
+		quat.setAxisAngle(this.rotation, Lock.rotAxis, lrt);
 	}
 }
 
@@ -664,6 +668,7 @@ class Abomination {
 
 class GameScene extends Scene {
 	keyItems: Key[] = [];
+	cameraIndex = 0;
 
 	constructor(canvas: HTMLCanvasElement, mapData: MapData) {
 		super();
@@ -674,6 +679,7 @@ class GameScene extends Scene {
 		const player = this.addEntity(new Player(grid));
 
 		this.addEntity(new FixedCamera(canvas, mapData.cameras, player, grid));
+		this.addEntity(new TopDownCamera(canvas));
 
 		for (let ki = 0; ki < 4; ++ki) {
 			const key = this.addEntity(new Key(ki));
@@ -689,6 +695,8 @@ class GameScene extends Scene {
 		this.addEntity(new Abomination(2, grid));
 		this.addEntity(new Abomination(3, grid));
 		this.addEntity(new Abomination(4, grid));
+
+		this.curCamera = this.cameras[this.cameraIndex];
 	}
 
 	update(dt: number) {
@@ -697,6 +705,10 @@ class GameScene extends Scene {
 			for (const k of this.keyItems) {
 				k.found = true;
 			}
+		}
+		else if (Input.keys[13]) {
+			this.cameraIndex = 1 - this.cameraIndex;
+			this.curCamera = this.cameras[this.cameraIndex];
 		}
 	}
 
