@@ -51,7 +51,7 @@ class FixedCamera extends EntityBehaviour {
 		if (! player) {
 			return;
 		}
-		const playerPos = vec3.clone(player.transform!.position);
+		const playerPos = vec3.clone(player.transform.position);
 		const playerPos2D = vec2.fromValues(playerPos[0], playerPos[2]);
 
 		// order viewpoints by distance to player
@@ -128,7 +128,7 @@ class Key extends EntityBehaviour {
 		if (this.found) {
 			return;
 		}
-		this.entity.transform!.setRotation(Key.rotAxis, App.tCur * 1.3);
+		this.transform.setRotation(Key.rotAxis, App.tCur * 1.3);
 	}
 }
 
@@ -146,7 +146,7 @@ class Lock extends EntityBehaviour {
 			return;
 		}
 		const lrt = (Math.PI / 40) * Math.sin(App.tCur * 2);
-		this.entity.transform!.setRotation(Lock.rotAxis, lrt);
+		this.transform.setRotation(Lock.rotAxis, lrt);
 	}
 }
 
@@ -184,8 +184,8 @@ class Door extends EntityBehaviour {
 	update(_dt: number) {
 		if (this.state === "opening") {
 			const step = Math.max(0, Math.min(1, (App.tCur - this.openT0) / 4));
-			this.entity.transform!.position[0] = 28.5 + ((Math.random() - 0.5) * 0.03);
-			this.entity.transform!.position[1] = -3 * step;
+			this.transform.position[0] = 28.5 + ((Math.random() - 0.5) * 0.03);
+			this.transform.position[1] = -3 * step;
 
 			if (step === 1) {
 				// unblock
@@ -241,7 +241,7 @@ class Player extends EntityBehaviour {
 		if (this.dieT >= 0) {
 			const meltStep = (App.tCur - this.dieT) / 4;
 			const meltClamp = clamp01f(meltStep);
-			vec3.set(this.entity.transform!.scale,
+			vec3.set(this.transform.scale,
 				0.25 + meltClamp * .75,
 				Math.max(0.1, 0.25 * Math.pow(1 - meltClamp, 2)),
 				0.25 + meltClamp * 0.75
@@ -249,8 +249,8 @@ class Player extends EntityBehaviour {
 
 			if (meltStep >= 2) {
 				// back to original position
-				vec3.set(this.entity.transform!.scale, 0.25, 0.25, 0.25);
-				vec3.set(this.entity.transform!.position, 28.5, this.entity.transform!.position[1], 25);
+				vec3.set(this.transform.scale, 0.25, 0.25, 0.25);
+				vec3.set(this.transform.position, 28.5, this.transform.position[1], 25);
 				this.viewAngle = Math.PI / -2; // radians
 				this.dieT = -1;
 			}
@@ -281,7 +281,7 @@ class Player extends EntityBehaviour {
 				vec2.set(this.movePos, 1, 0);
 				vec2.transformMat2(this.movePos, this.movePos, this.moveMat);
 
-				const oldPos = vec2.fromValues(this.entity.transform!.position[0], this.entity.transform!.position[2]);
+				const oldPos = vec2.fromValues(this.transform.position[0], this.transform.position[2]);
 				let newPos: MutNumArray = vec2.create();
 				vec2.add(newPos, oldPos, this.movePos);
 
@@ -294,14 +294,14 @@ class Player extends EntityBehaviour {
 				if (newPos[0] >= this.maze.grid.width) {
 					newPos[0] -= this.maze.grid.width;
 				}
-				this.entity.transform!.position[0] = newPos[0];
-				this.entity.transform!.position[2] = newPos[1];
+				this.transform.position[0] = newPos[0];
+				this.transform.position[2] = newPos[1];
 			}
 		}
 
 		// -- they all float down here
-		this.entity.transform!.position[1] = 0.35 + 0.05 * Math.sin(App.tCur * 3);
-		this.entity.transform!.setRotation(Player.rotAxis, -this.viewAngle);
+		this.transform.position[1] = 0.35 + 0.05 * Math.sin(App.tCur * 3);
+		this.transform.setRotation(Player.rotAxis, -this.viewAngle);
 	}
 }
 
@@ -347,7 +347,7 @@ class Abomination extends EntityBehaviour {
 		this.lastStepT = App.tCur;
 		this.direction = Abomination.spawnData[index].direction;
 		this.pathPos = vec2.clone(Abomination.spawnData[index].pathPos);
-		this.entity.transform!.setPosition(this.pathPos[0], 0, this.pathPos[1]);
+		this.transform.setPosition(this.pathPos[0], 0, this.pathPos[1]);
 		this.maze = this.scene.findEntityByName("maze")!.behaviour! as Maze;
 	}
 
@@ -361,9 +361,9 @@ class Abomination extends EntityBehaviour {
 				const dirVec3 = vec3.fromValues(dirVec2[0], 0, dirVec2[1]);
 
 				const moveOffset = vec3.scale([0, 0, 0], dirVec3, this.pathStep / 2);
-				vec3.add(this.entity.transform!.position, [this.pathPos[0] + 0.5, 0, this.pathPos[1] + 0.5], moveOffset);
+				vec3.add(this.transform.position, [this.pathPos[0] + 0.5, 0, this.pathPos[1] + 0.5], moveOffset);
 
-				this.entity.transform!.setRotation(Abomination.rotAxis, Abomination.rotations[this.direction]);
+				this.transform.setRotation(Abomination.rotAxis, Abomination.rotations[this.direction]);
 
 				// moved 1 full tile
 				if (this.pathStep === 2) {
@@ -394,7 +394,7 @@ class Abomination extends EntityBehaviour {
 				rotation -= Math.PI * 2;
 			}
 
-			this.entity.transform!.setRotation(Abomination.rotAxis, fromAngle + rotation * step);
+			this.transform.setRotation(Abomination.rotAxis, fromAngle + rotation * step);
 
 			if (step >= 1.0) {
 				this.phase = "move";

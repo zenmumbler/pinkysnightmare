@@ -111,10 +111,12 @@ export interface Entity {
 export class EntityBehaviour {
 	readonly scene: Scene;
 	readonly entity: Entity;
+	readonly transform: Transform;
 
 	constructor(scene: Scene, ent: Entity) {
 		this.scene = scene;
 		this.entity = ent;
+		this.transform = ent.transform;
 	}
 
 	awaken() {}
