@@ -1,12 +1,12 @@
+import { deg2rad } from "stardazed/core";
 import { mat4, vec2, vec3, quat } from "stardazed/vector";
 import { RenderMesh, RenderProgram, RenderTexture, Renderer } from "./render";
-import { deg2rad } from "stardazed/core";
+import { Assets } from "./asset";
 
 export interface TransformDescriptor {
 	readonly position: NumArray;
 	readonly rotation: NumArray;
 	readonly scale: NumArray;
-	modelMatrix?: Float32Array;
 }
 
 class Transform {
@@ -71,39 +71,68 @@ export class Camera {
 	}
 }
 
-export interface Drawable {
+export interface MeshRendererDescriptor {
+	meshName: string;
+	textureName?: string;
+}
+
+export class MeshRenderer {
 	mesh: RenderMesh;
 	program: RenderProgram;
 	texture?: RenderTexture;
+
+	constructor(mrd: MeshRendererDescriptor, assets: Assets) {
+		this.mesh = assets.meshes[mrd.meshName];
+		if (mrd.textureName) {
+			this.texture = assets.textures[mrd.textureName];
+			this.program = assets.texturedProgram;
+		}
+		else {
+			this.program = assets.modelProgram;
+		}
+	}
 }
 
 export interface ColliderDescriptor {
-	readonly radius: number;
-	readonly collisionType: number;
-	readonly collisionMask: number;
-	// onCollide?(other: ColliderDescriptor & Transformable): void;
+	radius: number;
+	collisionType: number;
+	collisionMask: number;
 }
 
-export interface EntityBase {
-	transform?: Transform;
-	collider?: ColliderDescriptor;
+export interface Entity {
+	name: string;
+	transform: Transform;
 	camera?: Camera;
-	drawable?: Drawable;
+	meshRenderer?: MeshRenderer;
+	collider?: ColliderDescriptor;
+	behaviour?: EntityBehaviour;
 }
 
-export interface Entity extends EntityBase {
-	awaken?(): void;
-	update(dt: number): void;
-	onCollide?(other: any): void;
+export class EntityBehaviour {
+	readonly scene: Scene;
+	readonly entity: Entity;
+
+	constructor(scene: Scene, ent: Entity) {
+		this.scene = scene;
+		this.entity = ent;
+	}
+
+	awaken() {}
+	update(_dt: number) {}
+	onCollide(_other: Entity) {}
+}
+
+export interface EntityBehaviourConstructor {
+	new(scene: Scene, ent: Entity): EntityBehaviour;
 }
 
 export interface EntityDescriptor {
 	name?: string;
-	transform?: TransformDescriptor;
+	transform: TransformDescriptor;
 	camera?: CameraDescriptor;
-	drawable?: Drawable;
+	meshRenderer?: MeshRendererDescriptor;
 	collider?: ColliderDescriptor;
-	behaviour?: Entity;
+	behaviour?: EntityBehaviourConstructor;
 }
 
 export type SceneRenderer = Renderer & {
@@ -113,59 +142,93 @@ export type SceneRenderer = Renderer & {
 
 
 export class Scene {
-	entities: EntityDescriptor[] = [];
+	entities: Entity[] = [];
 	updatables: Entity[] = [];
-	drawables: (Drawable & TransformDescriptor)[] = [];
-	collidables: (ColliderDescriptor & TransformDescriptor)[] = [];
-	cameras: Camera[] = [];
-	matrices: Float32Array[] = [];
+	renderers: Entity[] = [];
+	colliders: Entity[] = [];
+	cameras: Entity[] = [];
 	curCamera: Camera | undefined;
 
-	createEntities(canvas: HTMLCanvasElement, entityDescs: EntityDescriptor[]) {
-		for (const ed of entityDescs) {
-			const e: EntityBase = {};
-			if (ed.transform) {
-				e.transform = new Transform(ed.transform);
+	findEntityByName(name: string): Entity | undefined {
+		for (const e of this.entities) {
+			if (e.name === name) {
+				return e;
 			}
+		}
+		return undefined;
+	}
+
+	createEntities(canvas: HTMLCanvasElement, assets: Assets, entityDescs: EntityDescriptor[]) {
+		for (const ed of entityDescs) {
+			const e: Entity = {
+				name: ed.name || "",
+				transform: new Transform(ed.transform)
+			};
 			if (ed.collider) {
 				e.collider = ed.collider;
+				this.colliders.push(e);
 			}
 			if (ed.camera) {
 				const pos = (ed.transform) ? ed.transform.position : [0, 0, 0];
 				e.camera = new Camera(ed.camera, pos, canvas.width, canvas.height);
+				this.cameras.push(e);
 			}
-			if (ed.drawable) {
-				e.drawable = ed.drawable;
+			if (ed.meshRenderer) {
+				e.meshRenderer = new MeshRenderer(ed.meshRenderer, assets);
+				this.renderers.push(e);
 			}
 			if (ed.behaviour) {
 				// make behaviour
+				e.behaviour = new ed.behaviour(this, e);
+				this.updatables.push(e);
+			}
+			this.entities.push(e);
+		}
+
+		for (const e of this.updatables) {
+			if (e.behaviour && e.behaviour.awaken) {
+				e.behaviour.awaken();
 			}
 		}
+
+		this.curCamera = this.cameras.length ? this.cameras[0].camera : undefined;
 	}
 
 	update(dt: number) {
-		for (const u of this.updatables) {
-			u.update(dt);
+		for (const e of this.updatables) {
+			if (e.behaviour && e.behaviour.update) {
+				e.behaviour.update(dt);
+			}
 		}
 
 		// handle collisions (N log N - I think)
-		const collCount = this.collidables.length;
+		const collCount = this.colliders.length;
 		for (let ca = 0; ca < collCount; ++ca) {
-			const colliderA = this.collidables[ca];
-			const posA = [colliderA.position[0], colliderA.position[2]];
+			const collEntA = this.colliders[ca];
+			const colliderA = collEntA.collider;
+			const txA = collEntA.transform;
+			if (! (colliderA && txA)) {
+				continue;
+			}
+			const posA = [txA.position[0], txA.position[2]];
 			for (let cb = ca + 1; cb < collCount; ++cb) {
-				const colliderB = this.collidables[cb];
+				const collEntB = this.colliders[cb];
+				const colliderB = collEntB.collider;
+				const txB = collEntB.transform;
+				if (! (colliderB && txB)) {
+					continue;
+				}
 				const a2b = (colliderB.collisionType & colliderA.collisionMask);
 				const b2a = (colliderA.collisionType & colliderB.collisionMask);
 				if (a2b || b2a) {
-					const posB = [colliderB.position[0], colliderB.position[2]];
+					const posB = [txB.position[0], txB.position[2]];
 					const maxRadius = Math.max(colliderA.radius, colliderB.radius);
 					if (vec2.distance(posA, posB) < maxRadius) {
 						if (a2b) {
-							// colliderA.onCollide!(colliderB);
+							collEntA.behaviour?.onCollide?.(collEntB);
 						}
 						if (b2a) {
-							// colliderB.onCollide!(colliderA);
+							collEntB.behaviour?.onCollide?.(collEntA);
 						}
 					}
 				}
@@ -180,12 +243,17 @@ export class Scene {
 		}
 		const pass = renderer.createPass(curCamera.projectionMatrix, curCamera.viewMatrix, curCamera.fogLimits);
 
-		for (const d of this.drawables) {
+		for (const d of this.renderers) {
+			const dd = d.meshRenderer!;
+			const dtx = d.transform;
+			if (! dtx) {
+				continue;
+			}
 			pass.draw({
-				modelMatrix: mat4.fromRotationTranslationScale(d.modelMatrix!, d.rotation, d.position, d.scale),
-				mesh: d.mesh,
-				program: d.program,
-				texture: d.texture
+				modelMatrix: mat4.fromRotationTranslationScale(dtx.modelMatrix!, dtx.rotation, dtx.position, dtx.scale),
+				mesh: dd.mesh,
+				program: dd.program,
+				texture: dd.texture
 			});
 		}
 

@@ -29,6 +29,8 @@ export interface RenderPass {
 }
 
 export interface Renderer {
+	readonly canvas: HTMLCanvasElement;
+
 	setup(canvas: HTMLCanvasElement): void;
 	createMesh(geom: Geometry): RenderMesh;
 	createTexture(fileName: string): Promise<RenderTexture>;
@@ -146,8 +148,10 @@ class GLMesh {
 
 export class WebGLRenderer implements Renderer {
 	gl!: WebGLRenderingContext;
+	canvas!: HTMLCanvasElement;
 
 	setup(canvas: HTMLCanvasElement) {
+		this.canvas = canvas;
 		try {
 			this.gl = canvas.getContext("webgl")!;
 		} catch (e) {
@@ -272,8 +276,10 @@ export class WebGPURenderer implements Renderer {
 	device!: GPUDevice;
 	swapChain!: GPUSwapChain;
 	rpd!: GPURenderPassDescriptor;
+	canvas!: HTMLCanvasElement;
 
 	async setup(canvas: HTMLCanvasElement) {
+		this.canvas = canvas;
 		const adapter = await navigator.gpu.requestAdapter();
 		const device = await adapter.requestDevice();
 

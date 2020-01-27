@@ -1,22 +1,13 @@
-import { deg2rad, intRandom, clamp01f } from "stardazed/core";
+import { intRandom, clamp01f } from "stardazed/core";
 import { vec2, vec3, quat, mat4, mat2 } from "stardazed/vector";
 import { $1, show, hide } from "./util";
-import { Scene, EntityDescriptor, ColliderDescriptor, SceneRenderer } from "./scene";
+import { Scene, EntityDescriptor, SceneRenderer, Entity, EntityBehaviour } from "./scene";
 import { Grid, Direction } from "./grid";
-import { CameraPoint, genMapMesh, MapData } from "./levelgen";
+import { CameraPoint, genMapMesh } from "./levelgen";
 import { Input, KEY_A, KEY_D, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_S, KEY_UP, KEY_W } from "./input";
-import { RenderMesh, RenderTexture, RenderProgram } from "./render";
 import { loadObjFile } from "./objloader";
-import { u8Color, makeDoorGeometry } from "./asset";
+import { Assets, u8Color, makeDoorGeometry } from "./asset";
 import { App } from "./app";
-
-interface Assets {
-	meshes: Record<string, RenderMesh>;
-	textures: Record<string, RenderTexture>;
-	modelProgram: RenderProgram;
-	texturedProgram: RenderProgram;
-	mapData: MapData;
-}
 
 let assets: Assets;
 
@@ -29,57 +20,39 @@ const enum CollisionType {
 	ALL = 0xF
 }
 
-class Maze {
-	position = [0, 0, 0];
-	rotation = quat.create();
-	scale = [1, 1, 1];
-	mesh: RenderMesh;
-	program = assets.modelProgram;
+class Maze extends EntityBehaviour {
+	grid!: Grid;
 
-	constructor(mapMesh: RenderMesh) {
-		this.mesh = mapMesh;
+	awaken() {
+		const mapData = assets.mapData;
+		this.grid = new Grid(mapData.gridW, mapData.gridH, mapData.grid, mapData.path);
 	}
 }
 
-class TopDownCamera {
-	projectionMatrix: Float32Array;
-	viewMatrix: Float32Array;
-	fogLimits = new Float32Array([100.0, 1000.0]);
-
-	constructor(canvas: HTMLCanvasElement) {
-		const w = canvas.width;
-		const h = canvas.height;
-		this.projectionMatrix = mat4.create();
-		this.viewMatrix = mat4.create();
-
-		mat4.lookAt(this.viewMatrix, [28.5, 60, 32.5], [28.5, 0, 32.5], [0, 0, 1]);
-		mat4.perspective(this.projectionMatrix, deg2rad(65), w / h, 1, 100.0);
+class TopDownCamera extends EntityBehaviour {
+	awaken() {
+		mat4.lookAt(this.entity.camera!.viewMatrix, [28.5, 60, 32.5], [28.5, 0, 32.5], [0, 0, 1]);
 	}
 }
 
-class FixedCamera {
-	projectionMatrix: Float32Array;
-	viewMatrix: Float32Array;
-	fogLimits = new Float32Array([2.0, 8.0]);
+class FixedCamera extends EntityBehaviour {
+	fixedPoints!: CameraPoint[];
+	player!: Entity;
+	maze!: Maze;
 
-	fixedPoints: CameraPoint[];
-	player: Player;
-	grid: Grid;
-
-	constructor(canvas: HTMLCanvasElement, fixedPoints: CameraPoint[], player: Player, grid: Grid) {
-		this.fixedPoints = fixedPoints;
-		this.player = player;
-		this.grid = grid;
-
-		const w = canvas.width;
-		const h = canvas.height;
-		this.projectionMatrix = mat4.create();
-		mat4.perspective(this.projectionMatrix, deg2rad(65), w / h, 0.05, 25.0);
-		this.viewMatrix = mat4.create();
+	awaken() {
+		this.fixedPoints = assets.mapData.cameras;
+		this.player = this.scene.findEntityByName("player")!;
+		this.maze = this.scene.findEntityByName("maze")!.behaviour! as Maze;
 	}
 
 	update(_dt: number) {
-		const playerPos2D = vec2.fromValues(this.player.position[0], this.player.position[2]);
+		const player = this.scene.findEntityByName("player");
+		if (! player) {
+			return;
+		}
+		const playerPos = vec3.clone(player.transform!.position);
+		const playerPos2D = vec2.fromValues(playerPos[0], playerPos[2]);
 
 		// order viewpoints by distance to player
 		this.fixedPoints.sort(function(fpa, fpb) {
@@ -96,7 +69,7 @@ class FixedCamera {
 			// from this viewpoint, cast a ray to the player and find the first map wall we hit
 			vec2.subtract(temp, playerPos2D, camFP);
 			vec2.copy(f2p, temp);
-			const sq = this.grid.castRay(camFP, temp);
+			const sq = this.maze.grid.castRay(camFP, temp);
 
 			// calc distances from cam to wall and player
 			const camToSquareDistSq = vec2.squaredDistance(camFP, sq!.center);
@@ -121,7 +94,6 @@ class FixedCamera {
 		const camY = bestCam.doorCam ? 6 : 5;
 		const camPos = vec3.fromValues(bestCam[0], camY, bestCam[1]);
 
-		const playerPos = vec3.clone(this.player.position);
 		if (bestCam.doorCam) {
 			vec3.set(playerPos, 28.5, 0, 27); // fixed view of the home base
 		}
@@ -129,156 +101,106 @@ class FixedCamera {
 			playerPos[1] = 0.3; // player height oscillates but we don't want a wobbly camera
 		}
 
-		mat4.lookAt(this.viewMatrix, camPos, playerPos, [0, 1, 0]);
+		mat4.lookAt(this.entity.camera!.viewMatrix, camPos, playerPos, [0, 1, 0]);
 	}
 }
 
-class Key {
-	radius = 0.5;
-	collisionType = CollisionType.KEY;
-	collisionMask = CollisionType.PLAYER;
-	position: NumArray;
-	rotation = quat.create();
-	scale = [0.25, 0.25, 0.25];
-	mesh = assets.meshes["key"];
-	program = assets.modelProgram;
-
-	found: boolean;
-	index: number;
+class Key extends EntityBehaviour {
+	index!: number;
+	found!: boolean;
 
 	static rotAxis = [0, 1, 0];
 
-	static keyPositions = [
-		[4.5, .2, 8.5],
-		[52.5, .2, 8.5],
-		[4.5, .2, 48.5],
-		[52.5, .2, 48.5]
-	];
-
-	constructor(index: number) {
-		this.index = index;
+	awaken() {
+		this.index = parseInt(this.entity.name.substr(this.entity.name.length - 1), 10);
 		this.found = false;
-		this.position = vec3.copy(vec3.create(), Key.keyPositions[this.index]);
 	}
 
-	onCollide(_other: ColliderDescriptor) {
+	onCollide(_other: Entity) {
 		console.info("Collected key", this.index);
 		// collided with player
 		this.found = true;
 		// no longer interested in further collisions
-		this.collisionMask = CollisionType.NONE;
+		this.entity.collider!.collisionMask = CollisionType.NONE;
 	}
 
 	update(_dt: number) {
 		if (this.found) {
 			return;
 		}
-
-		quat.setAxisAngle(this.rotation, Key.rotAxis, App.tCur * 1.3);
+		this.entity.transform!.setRotation(Key.rotAxis, App.tCur * 1.3);
 	}
 }
 
-class Lock {
-	position: NumArray;
-	rotation = quat.create();
-	scale = [0.005, 0.005, 0.005];
-	mesh = assets.meshes["lock"];
-	program = assets.modelProgram;
-
-	key: Key;
-
+class Lock extends EntityBehaviour {
 	static rotAxis = [0, 0, 1];
+	key!: Entity;
 
-	static lockPositions = [
-		[29.3, 2.3, 26.8],
-		[27.5, 2.3, 26.8],
-		[29.3, 0.6, 26.8],
-		[27.5, 0.6, 26.8]
-	];
-
-	constructor(key: Key) {
-		this.key = key;
-		this.position = Lock.lockPositions[this.key.index];
+	awaken() {
+		const index = parseInt(this.entity.name.substr(this.entity.name.length - 1), 10);
+		this.key = this.scene.findEntityByName(`key${index}`)!;
 	}
 
 	update(_dt: number) {
-		if (this.key.found) {
+		if ((this.key.behaviour! as Key).found) {
 			return;
 		}
 		const lrt = (Math.PI / 40) * Math.sin(App.tCur * 2);
-		quat.setAxisAngle(this.rotation, Lock.rotAxis, lrt);
+		this.entity.transform!.setRotation(Lock.rotAxis, lrt);
 	}
 }
 
-class Door {
-	radius = 2;
-	collisionType = CollisionType.END;
-	collisionMask = CollisionType.PLAYER;
-	position = [28.5, 0, 27];
-	rotation = quat.create();
-	scale = [1, 1, 1];
-	mesh = assets.meshes.door;
-	program = assets.texturedProgram;
-	texture = assets.textures["door"];
+class Door extends EntityBehaviour {
+	maze!: Maze;
+	state!: "closed" | "opening" | "open";
+	openT0!: number;
 
-	state: "closed" | "opening" | "open";
-	openT0 = 0;
-
-	grid: Grid;
-	keyItems: Key[];
-
-	constructor(grid: Grid, keyItems: Key[]) {
-		this.grid = grid;
-		this.keyItems = keyItems;
-
+	awaken() {
 		this.state = "closed";
+		this.openT0 = 0;
+
+		this.maze = this.scene.findEntityByName("maze")!.behaviour! as Maze;
+		// this.keyItems = keyItems;
 
 		// block the home base
-		this.grid.set(27, 27, true);
-		this.grid.set(28, 27, true);
-		this.grid.set(29, 27, true);
+		this.maze.grid.set(27, 27, true);
+		this.maze.grid.set(28, 27, true);
+		this.maze.grid.set(29, 27, true);
 	}
 
-	onCollide(_other: ColliderDescriptor) {
+	onCollide(_other: Entity) {
 		if (this.state !== "closed") {
 			return;
 		}
 
-		const allKeys = this.keyItems.every(key => key.found);
+		const allKeys = false; // this.keyItems.every(key => key.found);
 		if (allKeys) {
 			this.state = "opening";
-			this.collisionMask = CollisionType.NONE;
 			this.openT0 = App.tCur;
+			this.entity.collider!.collisionMask = CollisionType.NONE;
 		}
 	}
 
 	update(_dt: number) {
 		if (this.state === "opening") {
 			const step = Math.max(0, Math.min(1, (App.tCur - this.openT0) / 4));
-			this.position[0] = 28.5 + ((Math.random() - 0.5) * 0.03);
-			this.position[1] = -3 * step;
+			this.entity.transform!.position[0] = 28.5 + ((Math.random() - 0.5) * 0.03);
+			this.entity.transform!.position[1] = -3 * step;
 
 			if (step === 1) {
 				// unblock
-				this.grid.set(27, 27, false);
-				this.grid.set(28, 27, false);
-				this.grid.set(29, 27, false);
+				this.maze.grid.set(27, 27, false);
+				this.maze.grid.set(28, 27, false);
+				this.maze.grid.set(29, 27, false);
 				this.state = "open";
 			}
 		}
 	}
 }
 
-class End {
-	radius = 1;
-	collisionType = CollisionType.END;
-	collisionMask = CollisionType.PLAYER;
-	position = [28.5, 0, 29.5];
-	rotation = quat.create();
-	scale = [1, 1, 1];
-
-	onCollide(_other: ColliderDescriptor) {
-		this.collisionMask = CollisionType.NONE;
+class End extends EntityBehaviour {
+	onCollide(_other: Entity) {
+		this.entity.collider!.collisionMask = CollisionType.NONE;
 
 		const totalSeconds = App.tCur | 0;
 		const minutes = (totalSeconds / 60) | 0;
@@ -291,35 +213,24 @@ class End {
 	}
 }
 
-class Player {
-	radius = .25; // grid units
-	collisionType = CollisionType.PLAYER;
-	collisionMask = CollisionType.ENEMY;
-	position = vec3.fromValues(28.5, 0.3, 25); // grid units
-	rotation = quat.create();
-	scale = [0.25, 0.25, 0.25];
-	mesh = assets.meshes["spookje"];
-	program = assets.modelProgram;
+class Player extends EntityBehaviour {
+	static rotAxis = [0, 1, 0];
+	static turnSpeed = Math.PI; // radians / sec
+	static speed = 2.3; // grid units / sec
 
-	grid: Grid;
-
-	viewAngle = Math.PI / -2; // radians
-	turnSpeed = Math.PI; // radians / sec
-	speed = 2.3; // grid units / sec
-	dieT = -1;
-	rotAxis = vec3.fromValues(0, 1, 0);
 	moveMat = mat2.create();
 	movePos = vec2.create();
+	viewAngle!: number; // radians
+	dieT!: number;
+	maze!: Maze;
 
-	constructor(grid: Grid) {
-		this.grid = grid;
+	awaken() {
+		this.viewAngle = Math.PI / -2; // radians
+		this.dieT = -1;
+		this.maze = this.scene.findEntityByName("maze")!.behaviour! as Maze;
 	}
 
-	moveTo2D(x: number, z: number) {
-		vec3.set(this.position, x, this.position[1], z);
-	}
-
-	onCollide(_other: ColliderDescriptor) {
+	onCollide(_other: Entity) {
 		if (this.dieT < 0) {
 			console.info("Player was eaten by Abomination");
 			this.dieT = App.tCur;
@@ -330,7 +241,7 @@ class Player {
 		if (this.dieT >= 0) {
 			const meltStep = (App.tCur - this.dieT) / 4;
 			const meltClamp = clamp01f(meltStep);
-			vec3.set(this.scale,
+			vec3.set(this.entity.transform!.scale,
 				0.25 + meltClamp * .75,
 				Math.max(0.1, 0.25 * Math.pow(1 - meltClamp, 2)),
 				0.25 + meltClamp * 0.75
@@ -338,8 +249,8 @@ class Player {
 
 			if (meltStep >= 2) {
 				// back to original position
-				vec3.set(this.scale, 0.25, 0.25, 0.25);
-				this.moveTo2D(28.5, 25);
+				vec3.set(this.entity.transform!.scale, 0.25, 0.25, 0.25);
+				vec3.set(this.entity.transform!.position, 28.5, this.entity.transform!.position[1], 25);
 				this.viewAngle = Math.PI / -2; // radians
 				this.dieT = -1;
 			}
@@ -348,20 +259,20 @@ class Player {
 			// -- rotation
 			let turnAngle = 0;
 			if (Input.keys[KEY_LEFT] || Input.keys[KEY_A]) {
-				turnAngle = -this.turnSpeed;
+				turnAngle = -Player.turnSpeed;
 			}
 			else if (Input.keys[KEY_RIGHT] || Input.keys[KEY_D]) {
-				turnAngle = this.turnSpeed;
+				turnAngle = Player.turnSpeed;
 			}
 			this.viewAngle += turnAngle * dt;
 
 			// -- movement
 			let speed = 0;
 			if (Input.keys[KEY_UP] || Input.keys[KEY_W]) {
-				speed = -this.speed;
+				speed = -Player.speed;
 			}
 			else if (Input.keys[KEY_DOWN] || Input.keys[KEY_S]) {
-				speed = this.speed;
+				speed = Player.speed;
 			}
 
 			if (speed !== 0) {
@@ -370,52 +281,42 @@ class Player {
 				vec2.set(this.movePos, 1, 0);
 				vec2.transformMat2(this.movePos, this.movePos, this.moveMat);
 
-				const oldPos = vec2.fromValues(this.position[0], this.position[2]);
+				const oldPos = vec2.fromValues(this.entity.transform!.position[0], this.entity.transform!.position[2]);
 				let newPos: MutNumArray = vec2.create();
 				vec2.add(newPos, oldPos, this.movePos);
 
-				newPos = this.grid.collideAndResolveCircle(oldPos, newPos, this.radius);
+				newPos = this.maze.grid.collideAndResolveCircle(oldPos, newPos, this.entity.collider!.radius);
 
 				// warp tunnel
 				if (newPos[0] < 0) {
-					newPos[0] += this.grid.width;
+					newPos[0] += this.maze.grid.width;
 				}
-				if (newPos[0] >= this.grid.width) {
-					newPos[0] -= this.grid.width;
+				if (newPos[0] >= this.maze.grid.width) {
+					newPos[0] -= this.maze.grid.width;
 				}
-				this.position[0] = newPos[0];
-				this.position[2] = newPos[1];
+				this.entity.transform!.position[0] = newPos[0];
+				this.entity.transform!.position[2] = newPos[1];
 			}
 		}
 
 		// -- they all float down here
-		this.position[1] = 0.35 + 0.05 * Math.sin(App.tCur * 3);
-		quat.setAxisAngle(this.rotation, this.rotAxis, -this.viewAngle);
+		this.entity.transform!.position[1] = 0.35 + 0.05 * Math.sin(App.tCur * 3);
+		this.entity.transform!.setRotation(Player.rotAxis, -this.viewAngle);
 	}
 }
 
-class Abomination {
-	radius = 1.4;
-	collisionType = CollisionType.ENEMY;
-	collisionMask = CollisionType.NONE;
-	position: NumArray;
-	rotation = quat.create();
-	scale = [1.25, 1.25, 1.25];
-	mesh = assets.meshes["pac0"];
-	program = assets.texturedProgram;
-	texture = assets.textures["crackpac"];
+class Abomination extends EntityBehaviour {
+	static stepDuration = 0.33;
+	static turnDuration = 0.6;
+	static rotAxis = [0, 1, 0];
 
-	grid: Grid;
-
-	phase = "move";
-	nextDir: Direction = "north";
-	pathStep = 0;
-	lastStepT = 0;
-	stepDuration = 0.33;
-	turnDuration = 0.6;
-	rotAxis = vec3.fromValues(0, 1, 0);
-	direction: Direction;
-	pathPos: NumArray;
+	phase!: "move" | "turn";
+	nextDir!: Direction;
+	pathStep!: number;
+	lastStepT!: number;
+	direction!: Direction;
+	pathPos!: NumArray;
+	maze!: Maze;
 
 	static spawnData: { direction: Direction, pathPos: number[] }[] = [
 		// { direction: "north", pathPos: [43, 18] },
@@ -438,34 +339,38 @@ class Abomination {
 		east: [1, 0]
 	};
 
-	constructor(index: number, grid: Grid) {
-		this.grid = grid;
+	awaken() {
+		const index = parseInt(this.entity.name!.substr(this.entity.name!.length - 1), 10);
+		console.info(`pac${index} awakening`);
+		this.phase = "move";
+		this.pathStep = 0;
+		this.lastStepT = App.tCur;
 		this.direction = Abomination.spawnData[index].direction;
 		this.pathPos = vec2.clone(Abomination.spawnData[index].pathPos);
-		this.position = [this.pathPos[0], 0, this.pathPos[1]];
+		this.entity.transform!.setPosition(this.pathPos[0], 0, this.pathPos[1]);
+		this.maze = this.scene.findEntityByName("maze")!.behaviour! as Maze;
 	}
 
 	update(_dt: number) {
 		if (this.phase === "move") {
-			if (App.tCur - this.lastStepT > this.stepDuration) {
+			if (App.tCur - this.lastStepT > Abomination.stepDuration) {
 				this.pathStep++;
-				this.mesh = assets.meshes["pac" + (1 - (this.pathStep & 1))];
+				this.entity.meshRenderer!.mesh = assets.meshes["pac" + (1 - (this.pathStep & 1))];
 				this.lastStepT = App.tCur;
 				const dirVec2 = Abomination.directionVecs[this.direction];
 				const dirVec3 = vec3.fromValues(dirVec2[0], 0, dirVec2[1]);
 
 				const moveOffset = vec3.scale([0, 0, 0], dirVec3, this.pathStep / 2);
-				vec3.set(this.position, this.pathPos[0] + 0.5, 0, this.pathPos[1] + 0.5);
-				vec3.add(this.position, this.position, moveOffset);
+				vec3.add(this.entity.transform!.position, [this.pathPos[0] + 0.5, 0, this.pathPos[1] + 0.5], moveOffset);
 
-				quat.setAxisAngle(this.rotation, this.rotAxis, Abomination.rotations[this.direction]);
+				this.entity.transform!.setRotation(Abomination.rotAxis, Abomination.rotations[this.direction]);
 
 				// moved 1 full tile
 				if (this.pathStep === 2) {
 					vec2.add(this.pathPos, this.pathPos, dirVec2);
 					this.pathStep = 0;
 
-					const exits = this.grid.pathExits(this.pathPos, this.direction);
+					const exits = this.maze.grid.pathExits(this.pathPos, this.direction);
 					const exit = exits[intRandom(exits.length)];
 
 					if (exit.dir !== this.direction) {
@@ -476,7 +381,7 @@ class Abomination {
 			}
 		} // move
 		else if (this.phase === "turn") {
-			let step = Math.max(0, Math.min(1, (App.tCur - this.lastStepT) / this.turnDuration));
+			let step = Math.max(0, Math.min(1, (App.tCur - this.lastStepT) / Abomination.turnDuration));
 			step = step * step;
 
 			const fromAngle = Abomination.rotations[this.direction];
@@ -489,12 +394,12 @@ class Abomination {
 				rotation -= Math.PI * 2;
 			}
 
-			quat.setAxisAngle(this.rotation, this.rotAxis, fromAngle + rotation * step);
+			this.entity.transform!.setRotation(Abomination.rotAxis, fromAngle + rotation * step);
 
 			if (step >= 1.0) {
 				this.phase = "move";
 				this.direction = this.nextDir;
-				// this.nextDir = "";
+				// self.nextDir = "";
 				this.lastStepT = App.tCur;
 			}
 		}
@@ -502,328 +407,320 @@ class Abomination {
 }
 
 export class GameScene extends Scene {
-	keyItems: Key[] = [];
 	cameraIndex = 0;
 
-	static entities: EntityDescriptor[] = [
-		{
-			name: "topdowncamera",
-			camera: {
-				fovy: 65,
-				zNear: 1,
-				zFar: 100,
-				fogNear: 100.0,
-				fogFar: 1000.0,
-			}
-		},
-		{
-			name: "fixedcamera",
-			camera: {
-				fovy: 65,
-				zNear: 0.05,
-				zFar: 25.0,
-				fogNear: 2.0,
-				fogFar: 8.0
-			}
-		},
-		{
-			name: "maze",
-			transform: {
-				position: [0, 0, 0],
-				rotation: [0, 0, 0, 1],
-				scale: [1, 1, 1]
-			}
-		},
-		{
-			name: "player",
-			transform: {
-				position: [28.5, 0.3, 25],
-				rotation: [0, 0, 0, 1],
-				scale: [0.25, 0.25, 0.25]
+	buildEntities(canvas: HTMLCanvasElement) {
+		const entityDescs: EntityDescriptor[] = [
+			{
+				name: "topdowncamera",
+				transform: {
+					position: [28.5, 60, 32.5],
+					rotation: [0, 0, 0, 1],
+					scale: [1, 1, 1]
+				},
+				camera: {
+					fovy: 65,
+					zNear: 1,
+					zFar: 100,
+					fogNear: 100.0,
+					fogFar: 1000.0,
+				},
+				behaviour: TopDownCamera
 			},
-			drawable: {
-				mesh: assets.meshes.spookje,
-				program: assets.modelProgram
+			{
+				name: "fixedcamera",
+				transform: {
+					position: [0, 0, 0],
+					rotation: [0, 0, 0, 1],
+					scale: [1, 1, 1]
+				},
+				camera: {
+					fovy: 65,
+					zNear: 0.05,
+					zFar: 25.0,
+					fogNear: 2.0,
+					fogFar: 8.0
+				},
+				behaviour: FixedCamera
 			},
-			collider: {
-				radius: .25,
-				collisionType: CollisionType.PLAYER,
-				collisionMask: CollisionType.ENEMY,
+			{
+				name: "maze",
+				transform: {
+					position: [0, 0, 0],
+					rotation: [0, 0, 0, 1],
+					scale: [1, 1, 1]
+				},
+				meshRenderer: {
+					meshName: "map"
+				},
+				behaviour: Maze
 			},
-		},
-		{
-			name: "key0",
-			transform: {
-				position: [4.5, .2, 8.5],
-				rotation: [0, 0, 0, 1],
-				scale: [0.25, 0.25, 0.25]
+			{
+				name: "player",
+				transform: {
+					position: [28.5, 0.3, 25],
+					rotation: [0, 0, 0, 1],
+					scale: [0.25, 0.25, 0.25]
+				},
+				meshRenderer: {
+					meshName: "spookje"
+				},
+				collider: {
+					radius: .25,
+					collisionType: CollisionType.PLAYER,
+					collisionMask: CollisionType.ENEMY,
+				},
+				behaviour: Player
 			},
-			drawable: {
-				mesh: assets.meshes.key,
-				program: assets.modelProgram
+			{
+				name: "key0",
+				transform: {
+					position: [4.5, .2, 8.5],
+					rotation: [0, 0, 0, 1],
+					scale: [0.25, 0.25, 0.25]
+				},
+				meshRenderer: {
+					meshName: "key",
+				},
+				collider: {
+					radius: .5,
+					collisionType: CollisionType.KEY,
+					collisionMask: CollisionType.PLAYER,
+				},
+				behaviour: Key
 			},
-			collider: {
-				radius: .5,
-				collisionType: CollisionType.KEY,
-				collisionMask: CollisionType.PLAYER,
+			{
+				name: "key1",
+				transform: {
+					position: [52.5, .2, 8.5],
+					rotation: [0, 0, 0, 1],
+					scale: [0.25, 0.25, 0.25]
+				},
+				meshRenderer: {
+					meshName: "key"
+				},
+				collider: {
+					radius: .5,
+					collisionType: CollisionType.KEY,
+					collisionMask: CollisionType.PLAYER,
+				},
+				behaviour: Key
 			},
-		},
-		{
-			name: "key1",
-			transform: {
-				position: [52.5, .2, 8.5],
-				rotation: [0, 0, 0, 1],
-				scale: [0.25, 0.25, 0.25]
+			{
+				name: "key2",
+				transform: {
+					position: [4.5, .2, 48.5],
+					rotation: [0, 0, 0, 1],
+					scale: [0.25, 0.25, 0.25]
+				},
+				meshRenderer: {
+					meshName: "key"
+				},
+				collider: {
+					radius: .5,
+					collisionType: CollisionType.KEY,
+					collisionMask: CollisionType.PLAYER,
+				},
+				behaviour: Key
 			},
-			drawable: {
-				mesh: assets.meshes.key,
-				program: assets.modelProgram
+			{
+				name: "key3",
+				transform: {
+					position: [52.5, .2, 48.5],
+					rotation: [0, 0, 0, 1],
+					scale: [0.25, 0.25, 0.25]
+				},
+				meshRenderer: {
+					meshName: "key"
+				},
+				collider: {
+					radius: .5,
+					collisionType: CollisionType.KEY,
+					collisionMask: CollisionType.PLAYER,
+				},
+				behaviour: Key
 			},
-			collider: {
-				radius: .5,
-				collisionType: CollisionType.KEY,
-				collisionMask: CollisionType.PLAYER,
+			{
+				name: "lock0",
+				transform: {
+					position: [29.3, 2.3, 26.8],
+					rotation: [0, 0, 0, 1],
+					scale: [0.005, 0.005, 0.005]
+				},
+				meshRenderer: {
+					meshName: "lock"
+				},
+				behaviour: Lock
 			},
-		},
-		{
-			name: "key2",
-			transform: {
-				position: [4.5, .2, 48.5],
-				rotation: [0, 0, 0, 1],
-				scale: [0.25, 0.25, 0.25]
+			{
+				name: "lock1",
+				transform: {
+					position: [27.5, 2.3, 26.8],
+					rotation: [0, 0, 0, 1],
+					scale: [0.005, 0.005, 0.005]
+				},
+				meshRenderer: {
+					meshName: "lock"
+				},
+				behaviour: Lock
 			},
-			drawable: {
-				mesh: assets.meshes.key,
-				program: assets.modelProgram
+			{
+				name: "lock2",
+				transform: {
+					position: [29.3, 0.6, 26.8],
+					rotation: [0, 0, 0, 1],
+					scale: [0.005, 0.005, 0.005]
+				},
+				meshRenderer: {
+					meshName: "lock"
+				},
+				behaviour: Lock
 			},
-			collider: {
-				radius: .5,
-				collisionType: CollisionType.KEY,
-				collisionMask: CollisionType.PLAYER,
+			{
+				name: "lock3",
+				transform: {
+					position: [27.5, 0.6, 26.8],
+					rotation: [0, 0, 0, 1],
+					scale: [0.005, 0.005, 0.005]
+				},
+				meshRenderer: {
+					meshName: "lock"
+				},
+				behaviour: Lock
 			},
-		},
-		{
-			name: "key3",
-			transform: {
-				position: [52.5, .2, 48.5],
-				rotation: [0, 0, 0, 1],
-				scale: [0.25, 0.25, 0.25]
+			{
+				name: "door",
+				transform: {
+					position: [28.5, 0, 27],
+					rotation: [0, 0, 0, 1],
+					scale: [1, 1, 1],
+				},
+				meshRenderer: {
+					meshName: "door",
+					textureName: "door",
+				},
+				collider: {
+					radius: 2,
+					collisionType: CollisionType.END,
+					collisionMask: CollisionType.PLAYER,
+				},
+				behaviour: Door
 			},
-			drawable: {
-				mesh: assets.meshes.key,
-				program: assets.modelProgram
+			{
+				name: "end",
+				transform: {
+					position: [28.5, 0, 29.5],
+					rotation: quat.create(),
+					scale: [1, 1, 1]
+				},
+				collider: {
+					radius: 1,
+					collisionType: CollisionType.END,
+					collisionMask: CollisionType.PLAYER,
+				},
+				behaviour: End
 			},
-			collider: {
-				radius: .5,
-				collisionType: CollisionType.KEY,
-				collisionMask: CollisionType.PLAYER,
+			{
+				name: "pac0",
+				transform: {
+					position: [0, 0, 0],
+					rotation: [0, 0, 0, 1],
+					scale: [1.25, 1.25, 1.25],
+				},
+				meshRenderer: {
+					meshName: "pac0",
+					textureName: "crackpac",
+				},
+				collider: {
+					radius: 1.4,
+					collisionType: CollisionType.ENEMY,
+					collisionMask: CollisionType.NONE,
+				},
+				behaviour: Abomination
 			},
-		},
-		{
-			name: "lock0",
-			transform: {
-				position: [29.3, 2.3, 26.8],
-				rotation: [0, 0, 0, 1],
-				scale: [0.005, 0.005, 0.005]
+			{
+				name: "pac1",
+				transform: {
+					position: [0, 0, 0],
+					rotation: [0, 0, 0, 1],
+					scale: [1.25, 1.25, 1.25],
+				},
+				meshRenderer: {
+					meshName: "pac0",
+					textureName: "crackpac",
+				},
+				collider: {
+					radius: 1.4,
+					collisionType: CollisionType.ENEMY,
+					collisionMask: CollisionType.NONE,
+				},
+				behaviour: Abomination
 			},
-			drawable: {
-				mesh: assets.meshes.lock,
-				program: assets.modelProgram
-			}
-		},
-		{
-			name: "lock1",
-			transform: {
-				position: [27.5, 2.3, 26.8],
-				rotation: [0, 0, 0, 1],
-				scale: [0.005, 0.005, 0.005]
+			{
+				name: "pac2",
+				transform: {
+					position: [0, 0, 0],
+					rotation: [0, 0, 0, 1],
+					scale: [1.25, 1.25, 1.25],
+				},
+				meshRenderer: {
+					meshName: "pac0",
+					textureName: "crackpac",
+				},
+				collider: {
+					radius: 1.4,
+					collisionType: CollisionType.ENEMY,
+					collisionMask: CollisionType.NONE,
+				},
+				behaviour: Abomination
 			},
-			drawable: {
-				mesh: assets.meshes.lock,
-				program: assets.modelProgram
-			}
-		},
-		{
-			name: "lock2",
-			transform: {
-				position: [29.3, 0.6, 26.8],
-				rotation: [0, 0, 0, 1],
-				scale: [0.005, 0.005, 0.005]
+			{
+				name: "pac3",
+				transform: {
+					position: [0, 0, 0],
+					rotation: [0, 0, 0, 1],
+					scale: [1.25, 1.25, 1.25],
+				},
+				meshRenderer: {
+					meshName: "pac0",
+					textureName: "crackpac",
+				},
+				collider: {
+					radius: 1.4,
+					collisionType: CollisionType.ENEMY,
+					collisionMask: CollisionType.NONE,
+				},
+				behaviour: Abomination
 			},
-			drawable: {
-				mesh: assets.meshes.lock,
-				program: assets.modelProgram
-			}
-		},
-		{
-			name: "lock3",
-			transform: {
-				position: [27.5, 0.6, 26.8],
-				rotation: [0, 0, 0, 1],
-				scale: [0.005, 0.005, 0.005]
+			{
+				name: "pac4",
+				transform: {
+					position: [0, 0, 0],
+					rotation: [0, 0, 0, 1],
+					scale: [1.25, 1.25, 1.25],
+				},
+				meshRenderer: {
+					meshName: "pac0",
+					textureName: "crackpac",
+				},
+				collider: {
+					radius: 1.4,
+					collisionType: CollisionType.ENEMY,
+					collisionMask: CollisionType.NONE,
+				},
+				behaviour: Abomination
 			},
-			drawable: {
-				mesh: assets.meshes.lock,
-				program: assets.modelProgram
-			}
-		},
-		{
-			name: "door",
-			transform: {
-				position: [28.5, 0, 27],
-				rotation: [0, 0, 0, 1],
-				scale: [1, 1, 1],
-			},
-			drawable: {
-				mesh: assets.meshes.door,
-				program: assets.texturedProgram,
-				texture: assets.textures["door"],
-			},
-			collider: {
-				radius: 2,
-				collisionType: CollisionType.END,
-				collisionMask: CollisionType.PLAYER,
-			}
-		},
-		{
-			name: "end",
-			transform: {
-				position: [28.5, 0, 29.5],
-				rotation: quat.create(),
-				scale: [1, 1, 1]
-			},
-			collider: {
-				radius: 1,
-				collisionType: CollisionType.END,
-				collisionMask: CollisionType.PLAYER,
-			}
-		},
-		{
-			name: "pac0",
-			transform: {
-				position: [0, 0, 0],
-				rotation: [0, 0, 0, 1],
-				scale: [1.25, 1.25, 1.25],
-			},
-			drawable: {
-				mesh: assets.meshes.pac0,
-				program: assets.texturedProgram,
-				texture: assets.textures.crackpac,
-			},
-			collider: {
-				radius: 1.4,
-				collisionType: CollisionType.ENEMY,
-				collisionMask: CollisionType.NONE,
-			},
-		},
-		{
-			name: "pac1",
-			transform: {
-				position: [0, 0, 0],
-				rotation: [0, 0, 0, 1],
-				scale: [1.25, 1.25, 1.25],
-			},
-			drawable: {
-				mesh: assets.meshes.pac0,
-				program: assets.texturedProgram,
-				texture: assets.textures.crackpac,
-			},
-			collider: {
-				radius: 1.4,
-				collisionType: CollisionType.ENEMY,
-				collisionMask: CollisionType.NONE,
-			},
-		},
-		{
-			name: "pac2",
-			transform: {
-				position: [0, 0, 0],
-				rotation: [0, 0, 0, 1],
-				scale: [1.25, 1.25, 1.25],
-			},
-			drawable: {
-				mesh: assets.meshes.pac0,
-				program: assets.texturedProgram,
-				texture: assets.textures.crackpac,
-			},
-			collider: {
-				radius: 1.4,
-				collisionType: CollisionType.ENEMY,
-				collisionMask: CollisionType.NONE,
-			},
-		},
-		{
-			name: "pac3",
-			transform: {
-				position: [0, 0, 0],
-				rotation: [0, 0, 0, 1],
-				scale: [1.25, 1.25, 1.25],
-			},
-			drawable: {
-				mesh: assets.meshes.pac0,
-				program: assets.texturedProgram,
-				texture: assets.textures.crackpac,
-			},
-			collider: {
-				radius: 1.4,
-				collisionType: CollisionType.ENEMY,
-				collisionMask: CollisionType.NONE,
-			},
-		},
-		{
-			name: "pac4",
-			transform: {
-				position: [0, 0, 0],
-				rotation: [0, 0, 0, 1],
-				scale: [1.25, 1.25, 1.25],
-			},
-			drawable: {
-				mesh: assets.meshes.pac0,
-				program: assets.texturedProgram,
-				texture: assets.textures.crackpac,
-			},
-			collider: {
-				radius: 1.4,
-				collisionType: CollisionType.ENEMY,
-				collisionMask: CollisionType.NONE,
-			},
-		},
-	];
+		];
 
-	constructor(canvas: HTMLCanvasElement) {
-		super();
-
-		const mapData = assets.mapData;
-		const grid = new Grid(mapData.gridW, mapData.gridH, mapData.grid, mapData.path);
-		this.curCamera = new FixedCamera(canvas, mapData.cameras, player, grid);
-/*
-		this.addEntity(new Maze(mapData.mesh));
-
-		const player = this.addEntity(new Player(grid));
-
-		this.addEntity(new FixedCamera(canvas, mapData.cameras, player, grid));
-		this.addEntity(new TopDownCamera(canvas));
-
-		for (let ki = 0; ki < 4; ++ki) {
-			const key = this.addEntity(new Key(ki));
-			this.addEntity(new Lock(key));
-			this.keyItems.push(key);
-		}
-
-		this.addEntity(new Door(grid, this.keyItems));
-		this.addEntity(new End());
-
-		this.addEntity(new Abomination(0, grid));
-		this.addEntity(new Abomination(1, grid));
-		this.addEntity(new Abomination(2, grid));
-		this.addEntity(new Abomination(3, grid));
-		this.addEntity(new Abomination(4, grid));
-
-		this.curCamera = this.cameras[this.cameraIndex];
-*/
+		this.createEntities(canvas, assets, entityDescs);
 	}
 
 	async load(renderer: SceneRenderer) {
+		assets = {
+			textures: {},
+			meshes: {}	
+		} as any;
+
 		assets.modelProgram = renderer.createProgram("standard");
 		assets.texturedProgram = renderer.createProgram("textured");
 
@@ -849,6 +746,7 @@ export class GameScene extends Scene {
 		assets.mapData = mapData;
 		assets.textures["door"] = stuff[1];
 		assets.textures["crackpac"] = stuff[2];
+		assets.meshes["map"] = mapData.mesh;
 		assets.meshes["pac0"] = stuff[3];
 		assets.meshes["pac1"] = stuff[4];
 		assets.meshes["key"] = stuff[5];
@@ -857,18 +755,20 @@ export class GameScene extends Scene {
 		assets.meshes["door"] = renderer.createMesh(makeDoorGeometry(mapData.cornerColors));
 
 		console.info("Asset load", Date.now() - before, "ms");
+
+		this.buildEntities(renderer.canvas);
 	}
 
 	update(dt: number) {
 		super.update(dt);
 		if (Input.keys[32]) {
-			for (const k of this.keyItems) {
-				k.found = true;
-			}
+			// for (const k of this.keyItems) {
+			// 	k.props.found = true;
+			// }
 		}
 		else if (Input.keys[13]) {
 			this.cameraIndex = 1 - this.cameraIndex;
-			this.curCamera = this.cameras[this.cameraIndex];
+			this.curCamera = this.cameras[this.cameraIndex].camera!;
 		}
 	}
 

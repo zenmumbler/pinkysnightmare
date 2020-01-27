@@ -1,5 +1,15 @@
-import { VertexAttributeRole, allocateGeometry } from "stardazed/geometry";
 import { Float } from "stardazed/core";
+import { VertexAttributeRole, allocateGeometry } from "stardazed/geometry";
+import { RenderMesh, RenderTexture, RenderProgram } from "./render";
+import { MapData } from "./levelgen";
+
+export interface Assets {
+	meshes: Record<string, RenderMesh>;
+	textures: Record<string, RenderTexture>;
+	modelProgram: RenderProgram;
+	texturedProgram: RenderProgram;
+	mapData: MapData;
+}
 
 export function u8Color(r: number, g: number, b: number) {
 	return [r / 255, g / 255, b / 255];

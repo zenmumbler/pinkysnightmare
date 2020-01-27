@@ -51,11 +51,12 @@ async function init() {
 	await renderer.setup(canvas);
 
 	App.init(renderer);
-	App.addScene("game", new GameScene(canvas));
+	App.addScene("game", new GameScene());
 	App.addScene("title", new TitleScreen());
 	App.addScene("victory", new VictoryScreen());
 
 	await App.ready;
+
 	App.setScene("title");
 	App.nextFrame();
 }

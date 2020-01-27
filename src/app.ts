@@ -14,7 +14,7 @@ export class Application {
 	init(renderer: Renderer) {
 		this.renderer = renderer as any;
 		this.renderer.modelProgram = this.renderer.createProgram("standard");
-		this.renderer.texturedProgream = this.renderer.createProgram("texturedProgram");
+		this.renderer.texturedProgream = this.renderer.createProgram("textured");
 
 		Input.onActiveChange = (active) => {
 			if (active) {
