@@ -1,7 +1,7 @@
 import { intRandom, clamp01f } from "stardazed/core";
 import { vec2, vec3, quat, mat4, mat2 } from "stardazed/vector";
 import { $1, show, hide } from "./util";
-import { Scene, EntityDescriptor, SceneRenderer, Entity, EntityBehaviour } from "./scene";
+import { Scene, EntityDescriptor, SceneRenderer, Entity, EntityBehaviour, Transform } from "./scene";
 import { Grid, Direction } from "./grid";
 import { CameraPoint, genMapMesh } from "./levelgen";
 import { Input, KEY_A, KEY_D, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_S, KEY_UP, KEY_W } from "./input";
@@ -154,13 +154,19 @@ class Door extends EntityBehaviour {
 	maze!: Maze;
 	state!: "closed" | "opening" | "open";
 	openT0!: number;
+	keyItems!: Key[];
 
 	awaken() {
 		this.state = "closed";
 		this.openT0 = 0;
 
 		this.maze = this.scene.findEntityByName("maze")!.behaviour! as Maze;
-		// this.keyItems = keyItems;
+		this.keyItems = [
+			this.scene.findEntityByName("key0")!.behaviour! as Key,
+			this.scene.findEntityByName("key1")!.behaviour! as Key,
+			this.scene.findEntityByName("key2")!.behaviour! as Key,
+			this.scene.findEntityByName("key3")!.behaviour! as Key
+		];
 
 		// block the home base
 		this.maze.grid.set(27, 27, true);
@@ -173,7 +179,7 @@ class Door extends EntityBehaviour {
 			return;
 		}
 
-		const allKeys = false; // this.keyItems.every(key => key.found);
+		const allKeys = this.keyItems.every(key => key.found);
 		if (allKeys) {
 			this.state = "opening";
 			this.openT0 = App.tCur;

@@ -9,7 +9,7 @@ export interface TransformDescriptor {
 	readonly scale: NumArray;
 }
 
-class Transform {
+export class Transform {
 	readonly position = vec3.create();
 	readonly rotation = quat.create();
 	readonly scale = vec3.create();
