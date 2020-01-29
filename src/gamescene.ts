@@ -1,7 +1,7 @@
 import { intRandom, clamp01f } from "stardazed/core";
 import { vec2, vec3, quat, mat4, mat2 } from "stardazed/vector";
 import { $1, show, hide } from "./util";
-import { Scene, EntityDescriptor, SceneRenderer, Entity, EntityBehaviour, Transform } from "./scene";
+import { Scene, EntityDescriptor, SceneRenderer, Entity, EntityBehaviour } from "./scene";
 import { Grid, Direction } from "./grid";
 import { CameraPoint, genMapMesh } from "./levelgen";
 import { Input, KEY_A, KEY_D, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_S, KEY_UP, KEY_W } from "./input";
@@ -724,7 +724,7 @@ export class GameScene extends Scene {
 	async load(renderer: SceneRenderer) {
 		assets = {
 			textures: {},
-			meshes: {}	
+			meshes: {}
 		} as any;
 
 		assets.modelProgram = renderer.createProgram("standard");
