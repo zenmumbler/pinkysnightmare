@@ -719,6 +719,7 @@ export class GameScene extends Scene {
 		];
 
 		this.createEntities(canvas, assets, entityDescs);
+		this.curCamera = this.cameras[1].camera!;
 	}
 
 	async load(renderer: SceneRenderer) {

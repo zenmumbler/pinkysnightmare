@@ -545,7 +545,7 @@ export class WebGPURenderer implements Renderer {
 		return {
 			draw(cmd: RenderCommand) {
 				cmd.texture = { texture: pass };
-				cmd.mesh.draw(pv, cmd.program, undefined);
+				cmd.mesh.draw(pv, cmd.program, { texture: pass });
 			},
 			finish() {
 				pass.endPass();
