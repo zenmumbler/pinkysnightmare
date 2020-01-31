@@ -1,6 +1,6 @@
 import { UInt8 } from "stardazed/core";
 import { mat4 } from "stardazed/vector";
-import { Geometry, VertexAttributeRole } from "stardazed/geometry";
+import { Geometry, VertexAttributeRole, StepMode } from "stardazed/geometry";
 import { assert } from "./util";
 import { loadImageData } from "./asset";
 
@@ -349,7 +349,7 @@ export class WebGPURenderer implements Renderer {
 						}
 					],
 					stride: vb.stride,
-					stepMode: vb.divisor === 0 ? "vertex" : "instance"
+					stepMode: vb.stepMode === StepMode.Vertex ? "vertex" : "instance"
 				}
 			],
 			indexFormat
