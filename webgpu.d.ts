@@ -1,6 +1,6 @@
 // WebGPU types
 // by @zenmumbler
-// Up-to-date with spec as of 2020-Jan-17
+// Up-to-date with spec as of 2020-Feb-7
 
 interface GPUObjectDescriptorBase {
 	label?: string;
@@ -682,7 +682,7 @@ interface GPUUncapturedErrorEventConstructor {
 declare const GPUUncapturedErrorEvent: GPUUncapturedErrorEventConstructor;
 
 
-type GPUExtensionName = "anisotropic-filtering";
+type GPUExtensionName = "texture-compression-bc";
 
 interface GPULimits {
 	maxBindGroups?: number;
