@@ -21,10 +21,7 @@ export class Square {
 	}
 
 	closestPoint(pt2: NumArray): NumArray {
-		const closest = vec2.create();
-		vec2.max(closest, this.min, pt2);
-		vec2.min(closest, this.max, closest);
-		return closest;
+		return vec2.clamp(vec2.create(), pt2, this.min, this.max);
 	}
 
 	containsPoint(pt2: NumArray): boolean {

@@ -58,7 +58,7 @@ class FixedCamera extends EntityBehaviour {
 		this.fixedPoints.sort(function(fpa, fpb) {
 			const distA = vec2.squaredDistance(fpa, playerPos2D);
 			const distB = vec2.squaredDistance(fpb, playerPos2D);
-			return (distA < distB) ? -1 : ((distB < distA) ? 1 : 0);
+			return distA - distB;
 		});
 
 		let bestCam = null;

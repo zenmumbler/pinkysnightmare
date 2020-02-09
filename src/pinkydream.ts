@@ -46,8 +46,8 @@ class VictoryScreen extends Scene {
 
 async function init() {
 	const canvas = document.querySelector("canvas")!;
-	// const renderer = new WebGLRenderer();
-	const renderer = new WebGPURenderer();
+	const renderer = new WebGLRenderer();
+	// const renderer = new WebGPURenderer();
 	await renderer.setup(canvas);
 
 	App.init(renderer);
