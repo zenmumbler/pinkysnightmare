@@ -1,7 +1,7 @@
 // Part of Pinky's Nightmare
 // (c) 2015-6 by Arthur Langereis - @zenmumbler
 
-import { vec2, vec3, vec4 } from "stardazed/vector";
+import { vec2, vec3, vec4, Vector3 } from "stardazed/vector";
 import { u8Color, quickGeometry, loadImageData } from "./asset.js";
 import { RenderMesh, Renderer } from "./render";
 
@@ -105,12 +105,12 @@ function buildMapFromImageData(renderer: Renderer, pix: ImageData): MapData {
 					grid[gridOffset] = true;
 
 					// determine color to use
-					const topColor = vec3.create();
-					const botColor = vec3.create();
+					let topColor: Vector3;
+					let botColor: Vector3;
 
 					if (x >= homeBaseMin[0] && x <= homeBaseMax[0] && z >= homeBaseMin[1] && z <= homeBaseMax[1]) {
-						vec3.copy(topColor, cornerColors[4]);
-						vec3.scale(botColor, topColor, 0.6);
+						topColor = Vector3.fromArray(cornerColors[4]);
+						botColor = topColor.mul(0.6);
 					}
 					else {
 						// calculate interpolated color by distance from the 4 corners of the field
@@ -127,13 +127,19 @@ function buildMapFromImageData(renderer: Renderer, pix: ImageData): MapData {
 						cornerDist[2] = Math.pow(.5 + (.5 * Math.cos(Math.PI * cornerDist[2])), 2);
 						cornerDist[3] = Math.pow(.5 + (.5 * Math.cos(Math.PI * cornerDist[3])), 2);
 
-						vec3.scaleAndAdd(topColor, topColor, cornerColors[0], cornerDist[0]); // may exceed 1 for factors, but will be clamped by gpu
-						vec3.scaleAndAdd(topColor, topColor, cornerColors[1], cornerDist[1]);
-						vec3.scaleAndAdd(topColor, topColor, cornerColors[2], cornerDist[2]);
-						vec3.scaleAndAdd(topColor, topColor, cornerColors[3], cornerDist[3]);
+						topColor = Vector3.fromArray(cornerColors[0]).mul(cornerDist[0])
+							.mulAdd(Vector3.fromArray(cornerColors[1]), cornerDist[1])
+							.mulAdd(Vector3.fromArray(cornerColors[2]), cornerDist[2])
+							.mulAdd(Vector3.fromArray(cornerColors[3]), cornerDist[3]);
+						// vec3.scaleAndAdd(topColor, topColor, cornerColors[0], cornerDist[0]); // may exceed 1 for factors, but will be clamped by gpu
+						// vec3.scaleAndAdd(topColor, topColor, cornerColors[1], cornerDist[1]);
+						// vec3.scaleAndAdd(topColor, topColor, cornerColors[2], cornerDist[2]);
+						// vec3.scaleAndAdd(topColor, topColor, cornerColors[3], cornerDist[3]);
 
-						vec3.scale(botColor, topColor, botDarkenFactor);
-						vec3.scale(topColor, topColor, topDarkenFactor);
+						botColor = topColor.mul(botDarkenFactor);
+						topColor = topColor.mul(topDarkenFactor);
+						// vec3.scale(botColor, topColor, botDarkenFactor);
+						// vec3.scale(topColor, topColor, topDarkenFactor);
 					}
 
 					// ccw
@@ -147,7 +153,7 @@ function buildMapFromImageData(renderer: Renderer, pix: ImageData): MapData {
 					vtx(xb, h, za);
 
 					nrm6(north);
-					col6(topColor, botColor);
+					col6(topColor.asArray(), botColor.asArray());
 
 					// wall left
 					vtx(xa, h, za);
@@ -159,7 +165,7 @@ function buildMapFromImageData(renderer: Renderer, pix: ImageData): MapData {
 					vtx(xa, h, za);
 
 					nrm6(west);
-					col6(topColor, botColor);
+					col6(topColor.asArray(), botColor.asArray());
 
 					// wall bottom
 					vtx(xa, h, zb);
@@ -171,7 +177,7 @@ function buildMapFromImageData(renderer: Renderer, pix: ImageData): MapData {
 					vtx(xa, h, zb);
 
 					nrm6(south);
-					col6(topColor, botColor);
+					col6(topColor.asArray(), botColor.asArray());
 
 					// wall right
 					vtx(xb, h, zb);
@@ -183,7 +189,7 @@ function buildMapFromImageData(renderer: Renderer, pix: ImageData): MapData {
 					vtx(xb, h, zb);
 
 					nrm6(east);
-					col6(topColor, botColor);
+					col6(topColor.asArray(), botColor.asArray());
 				}
 			}
 

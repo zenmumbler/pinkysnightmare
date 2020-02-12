@@ -13,7 +13,7 @@ export interface TransformDescriptor {
 
 export type TXID = number & {
 	__TX__?: never;
-}
+};
 
 export class Tx {
 	private readonly positions = new Float32Array(MAX_ENTITIES * 3);
