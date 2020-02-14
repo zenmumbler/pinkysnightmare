@@ -1,11 +1,14 @@
 // Part of Pinky's Nightmare
 // (c) 2015-6 by Arthur Langereis - @zenmumbler
 
-import { vec2, vec3, vec4, Vector3 } from "stardazed/vector";
+import { Vector2, Vector3, Vector4 } from "stardazed/vector";
 import { u8Color, quickGeometry, loadImageData } from "./asset.js";
 import { RenderMesh, Renderer } from "./render";
 
-export type CameraPoint = NumArray & { doorCam: boolean };
+export interface CameraPoint {
+	pos: Vector2;
+	doorCam: boolean;
+};
 
 export interface MapData {
 	cameras: CameraPoint[];
@@ -14,38 +17,38 @@ export interface MapData {
 	gridW: number;
 	gridH: number;
 	mesh: RenderMesh;
-	cornerColors: number[][];
+	cornerColors: Vector3[];
 }
 
 function buildMapFromImageData(renderer: Renderer, pix: ImageData): MapData {
 	const data = pix.data, pixw = pix.width, pixh = pix.height;
 	let inuse = 0, offset = 0, gridOffset = 0;
 
-	const HEIGHT = 5.0;       // will appear inf high
+	const HEIGHT = 6.0;       // will appear inf high
 
 	const vertexes: number[] = [], normals: number[] = [], colours: number[] = [], cameras: CameraPoint[] = [], grid = [], path = [];
 
 	function vtx(x: number, y: number, z: number) { vertexes.push(x, y, z); }
-	function nrm6(nrm: NumArray) { for (let n = 0; n < 6; ++n) { normals.push(nrm[0], nrm[1], nrm[2]); } }
-	function col6(colT: NumArray, colB: NumArray) {
-		colours.push(colT[0], colT[1], colT[2]);
-		colours.push(colB[0], colB[1], colB[2]);
-		colours.push(colB[0], colB[1], colB[2]);
+	function nrm6(nrm: Vector3) { for (let n = 0; n < 6; ++n) { normals.push(nrm.x, nrm.y, nrm.z); } }
+	function col6(colT: Vector3, colB: Vector3) {
+		colours.push(colT.x, colT.y, colT.z);
+		colours.push(colB.x, colB.y, colB.z);
+		colours.push(colB.x, colB.y, colB.z);
 
-		colours.push(colB[0], colB[1], colB[2]);
-		colours.push(colT[0], colT[1], colT[2]);
-		colours.push(colT[0], colT[1], colT[2]);
+		colours.push(colB.x, colB.y, colB.z);
+		colours.push(colT.x, colT.y, colT.z);
+		colours.push(colT.x, colT.y, colT.z);
 	}
 
-	const north = [0, 0, -1],        // normals of the sides
-		west  = [-1, 0, 0],
-		south = [0, 0, 1],
-		east  = [1, 0, 0];
+	const north = new Vector3(0, 0, -1),        // normals of the sides
+		west = new Vector3(-1, 0, 0),
+		south = new Vector3(0, 0, 1),
+		east = new Vector3(1, 0, 0);
 	const corners = [
-		[0, 0],
-		[pixw, 0],
-		[0, pixh],
-		[pixw, pixh]
+		new Vector2(0, 0),
+		new Vector2(pixw, 0),
+		new Vector2(0, pixh),
+		new Vector2(pixw, pixh)
 	];
 
 	const cornerColors = [
@@ -61,9 +64,9 @@ function buildMapFromImageData(renderer: Renderer, pix: ImageData): MapData {
 		botDarkenFactor = 0.30;    // bottom vertices are darker than top ones
 
 	// home base in the grid
-	const homeBaseMin = [21, 26],
-		homeBaseMax = [35, 34];
-	const doorCameraLoc = [28, 23];
+	const homeBaseMin = new Vector2(21, 26),
+		homeBaseMax = new Vector2(35, 34);
+	const doorCameraLoc = new Vector2(28, 23);
 
 	for (let z = 0; z < pixh; ++z) {
 		for (let x = 0; x < pixw; ++x) {
@@ -83,20 +86,24 @@ function buildMapFromImageData(renderer: Renderer, pix: ImageData): MapData {
 					zb = (z + 1),
 					h = HEIGHT;
 
+				const posXZ = new Vector2(x, z);
+
 				if (data[offset + 2] === 255) {
 					path[gridOffset] = true;
 				}
 
 				if (data[offset + 1] === 255) {
-					if (vec2.equals([x, z], doorCameraLoc)) {
-						const dc: any = vec2.fromValues(x + .5, z + .1);
-						dc.doorCam = true;
-						cameras.push(dc);
+					if (posXZ.equals(doorCameraLoc)) {
+						cameras.push({
+							pos: new Vector2(x + .5, z + .1),
+							doorCam: true
+						});
 					}
 					else {
-						const dc: any = vec2.fromValues(x + .5, z + .5);
-						dc.doorCam = false;
-						cameras.push(dc);
+						cameras.push({
+							pos: new Vector2(x + .5, z + .5),
+							doorCam: false
+						});
 					}
 				}
 
@@ -109,37 +116,32 @@ function buildMapFromImageData(renderer: Renderer, pix: ImageData): MapData {
 					let botColor: Vector3;
 
 					if (x >= homeBaseMin[0] && x <= homeBaseMax[0] && z >= homeBaseMin[1] && z <= homeBaseMax[1]) {
-						topColor = Vector3.fromArray(cornerColors[4]);
+						topColor = cornerColors[4].clone();
 						botColor = topColor.mul(0.6);
 					}
 					else {
 						// calculate interpolated color by distance from the 4 corners of the field
-						const cornerDist = vec4.create();
-						cornerDist[0] = vec2.squaredDistance(corners[0], [x, z]);
-						cornerDist[1] = vec2.squaredDistance(corners[1], [x, z]);
-						cornerDist[2] = vec2.squaredDistance(corners[2], [x, z]);
-						cornerDist[3] = vec2.squaredDistance(corners[3], [x, z]);
+						const cornerDist = new Vector4(
+							corners[0].sqrDistance(posXZ),
+							corners[1].sqrDistance(posXZ),
+							corners[2].sqrDistance(posXZ),
+							corners[3].sqrDistance(posXZ)
+						);
 
-						vec4.normalize(cornerDist, cornerDist);
+						cornerDist.setNormalized();
 
-						cornerDist[0] = Math.pow(.5 + (.5 * Math.cos(Math.PI * cornerDist[0])), 2);
-						cornerDist[1] = Math.pow(.5 + (.5 * Math.cos(Math.PI * cornerDist[1])), 2);
-						cornerDist[2] = Math.pow(.5 + (.5 * Math.cos(Math.PI * cornerDist[2])), 2);
-						cornerDist[3] = Math.pow(.5 + (.5 * Math.cos(Math.PI * cornerDist[3])), 2);
+						cornerDist.x = Math.pow(.5 + (.5 * Math.cos(Math.PI * cornerDist.x)), 2);
+						cornerDist.y = Math.pow(.5 + (.5 * Math.cos(Math.PI * cornerDist.y)), 2);
+						cornerDist.z = Math.pow(.5 + (.5 * Math.cos(Math.PI * cornerDist.z)), 2);
+						cornerDist.w = Math.pow(.5 + (.5 * Math.cos(Math.PI * cornerDist.w)), 2);
 
-						topColor = Vector3.fromArray(cornerColors[0]).mul(cornerDist[0])
-							.mulAdd(Vector3.fromArray(cornerColors[1]), cornerDist[1])
-							.mulAdd(Vector3.fromArray(cornerColors[2]), cornerDist[2])
-							.mulAdd(Vector3.fromArray(cornerColors[3]), cornerDist[3]);
-						// vec3.scaleAndAdd(topColor, topColor, cornerColors[0], cornerDist[0]); // may exceed 1 for factors, but will be clamped by gpu
-						// vec3.scaleAndAdd(topColor, topColor, cornerColors[1], cornerDist[1]);
-						// vec3.scaleAndAdd(topColor, topColor, cornerColors[2], cornerDist[2]);
-						// vec3.scaleAndAdd(topColor, topColor, cornerColors[3], cornerDist[3]);
+						topColor = cornerColors[0].mul(cornerDist.x)
+							.mulAdd(cornerColors[1], cornerDist.y)
+							.mulAdd(cornerColors[2], cornerDist.z)
+							.mulAdd(cornerColors[3], cornerDist.w);
 
 						botColor = topColor.mul(botDarkenFactor);
 						topColor = topColor.mul(topDarkenFactor);
-						// vec3.scale(botColor, topColor, botDarkenFactor);
-						// vec3.scale(topColor, topColor, topDarkenFactor);
 					}
 
 					// ccw
@@ -153,7 +155,7 @@ function buildMapFromImageData(renderer: Renderer, pix: ImageData): MapData {
 					vtx(xb, h, za);
 
 					nrm6(north);
-					col6(topColor.asArray(), botColor.asArray());
+					col6(topColor, botColor);
 
 					// wall left
 					vtx(xa, h, za);
@@ -165,7 +167,7 @@ function buildMapFromImageData(renderer: Renderer, pix: ImageData): MapData {
 					vtx(xa, h, za);
 
 					nrm6(west);
-					col6(topColor.asArray(), botColor.asArray());
+					col6(topColor, botColor);
 
 					// wall bottom
 					vtx(xa, h, zb);
@@ -177,7 +179,7 @@ function buildMapFromImageData(renderer: Renderer, pix: ImageData): MapData {
 					vtx(xa, h, zb);
 
 					nrm6(south);
-					col6(topColor.asArray(), botColor.asArray());
+					col6(topColor, botColor);
 
 					// wall right
 					vtx(xb, h, zb);
@@ -189,7 +191,7 @@ function buildMapFromImageData(renderer: Renderer, pix: ImageData): MapData {
 					vtx(xb, h, zb);
 
 					nrm6(east);
-					col6(topColor.asArray(), botColor.asArray());
+					col6(topColor, botColor);
 				}
 			}
 

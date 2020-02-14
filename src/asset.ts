@@ -1,4 +1,5 @@
 import { Float } from "stardazed/core";
+import { Vector3 } from "stardazed/vector";
 import { VertexAttributeRole, allocateGeometry } from "stardazed/geometry";
 import { RenderMesh, RenderTexture, RenderProgram } from "./render";
 import { MapData } from "./levelgen";
@@ -12,7 +13,7 @@ export interface Assets {
 }
 
 export function u8Color(r: number, g: number, b: number) {
-	return [r / 255, g / 255, b / 255];
+	return new Vector3(r / 255, g / 255, b / 255);
 }
 
 export function quickGeometry(positions: NumArray, normals: NumArray, colours: NumArray, uvs?: NumArray) {
@@ -42,7 +43,7 @@ export function quickGeometry(positions: NumArray, normals: NumArray, colours: N
 	return geom;
 }
 
-export function makeDoorGeometry(cornerColors: number[][]) {
+export function makeDoorGeometry(cornerColors: Vector3[]) {
 	const vertexes: number[] = [], normals: number[] = [], colors: number[] = [], uvs = [];
 
 	const xa = -1.5, xb = 1.5,
@@ -50,7 +51,7 @@ export function makeDoorGeometry(cornerColors: number[][]) {
 		za = 0, zb = .5;
 
 	function vtx(x: number, y: number, z: number) { vertexes.push(x, y, z); }
-	function col(c: number) { colors.push(cornerColors[c][0], cornerColors[c][1], cornerColors[c][2]); }
+	function col(c: number) { colors.push(cornerColors[c].x, cornerColors[c].y, cornerColors[c].z); }
 	function nrm6(nrm: number[]) { for (let n = 0; n < 6; ++n) { normals.push(nrm[0], nrm[1], nrm[2]); } }
 
 	vtx(xb, h, za); col(0); uvs.push(0, 0);

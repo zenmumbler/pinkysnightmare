@@ -1,55 +1,55 @@
-import { vec2 } from "stardazed/vector";
+import { Vector2 } from "stardazed/vector";
 import { assert } from "./util";
 
 export class Square {
-	min: NumArray;
-	max: NumArray;
-	center: NumArray;
+	min: Vector2;
+	max: Vector2;
+	center: Vector2;
 
 	normals = [
-		vec2.fromValues(-1, 0), // left
-		vec2.fromValues(1, 0), // right
-		vec2.fromValues(0, -1), // top
-		vec2.fromValues(0, 1), // bottom
-		vec2.fromValues(Math.sqrt(2), Math.sqrt(2)) // inner (hack)
+		new Vector2(-1, 0), // left
+		new Vector2(1, 0), // right
+		new Vector2(0, -1), // top
+		new Vector2(0, 1), // bottom
+		new Vector2(Math.sqrt(2), Math.sqrt(2)) // inner (hack)
 	];
 
 	constructor(x: number, y: number) {
-		this.min = vec2.fromValues(x, y);
-		this.max = vec2.fromValues(x + 1, y + 1);
-		this.center = vec2.fromValues(x + .5, y + .5);
+		this.min = new Vector2(x, y);
+		this.max = new Vector2(x + 1, y + 1);
+		this.center = new Vector2(x + .5, y + .5);
 	}
 
-	closestPoint(pt2: NumArray): NumArray {
-		return vec2.clamp(vec2.create(), pt2, this.min, this.max);
+	closestPoint(pt2: Vector2) {
+		return pt2.clamp(this.min, this.max);
 	}
 
-	containsPoint(pt2: NumArray): boolean {
-		return vec2.equals(this.closestPoint(pt2), pt2);
+	containsPoint(pt2: Vector2) {
+		return this.closestPoint(pt2).equals(pt2);
 	}
 
-	normalAtClosestPoint(pt2: NumArray): NumArray {
+	normalAtClosestPoint(pt2: Vector2) {
 		const closest = this.closestPoint(pt2);
 
-		if (vec2.equals(closest, pt2)) { // pt2 contained in box
-			return vec2.clone(this.normals[4]); // HACK: push out diagonally down right
+		if (closest.equals(pt2)) { // pt2 contained in box
+			return this.normals[4].clone(); // HACK: push out diagonally down right
 		}
 
 		if (closest[0] === this.min[0]) {
-			return vec2.clone(this.normals[0]);
+			return this.normals[0].clone();
 		}
 		else if (closest[0] === this.max[0]) {
-			return vec2.clone(this.normals[1]);
+			return this.normals[1].clone();
 		}
 		else if (closest[1] === this.min[1]) {
-			return vec2.clone(this.normals[2]);
+			return this.normals[2].clone();
 		}
 
-		return vec2.clone(this.normals[3]);
+		return this.normals[3].clone();
 	}
 
-	distanceToPoint(pt2: NumArray): number {
-		return vec2.distance(this.closestPoint(pt2), pt2);
+	distanceToPoint(pt2: Vector2) {
+		return this.closestPoint(pt2).distance(pt2);
 	}
 }
 
@@ -87,7 +87,7 @@ export class Grid {
 		return this.path[(z >> 0) * this.width + (x >> 0)];
 	}
 
-	pathExits(curPos: NumArray, curDir: Direction) {
+	pathExits(curPos: Vector2, curDir: Direction) {
 		const x = curPos[0], z = curPos[1], exits: { pos: number[], dir: Direction }[] = [];
 		assert(this.pathAt(x, z), "you're not on a path!");
 
@@ -111,15 +111,15 @@ export class Grid {
 		this.squares[(z >> 0) * this.width + (x >> 0)] = sq;
 	}
 
-	castRay(from: NumArray, direction: NumArray): Square | null {
+	castRay(from: Vector2, direction: Vector2): Square | null {
 		// adapted from sample code at: http://lodev.org/cgtutor/raycasting.html
-		vec2.normalize(direction, direction);
+		direction = direction.normalize();
 
 		// calculate ray position and direction
-		const rayPosX = from[0];
-		const rayPosY = from[1];
-		const rayDirX = direction[0];
-		const rayDirY = direction[1];
+		const rayPosX = from.x;
+		const rayPosY = from.y;
+		const rayDirX = direction.x;
+		const rayDirY = direction.y;
 		// which box of the map we're in
 		let mapX = rayPosX << 0;
 		let mapY = rayPosY << 0;
@@ -171,13 +171,10 @@ export class Grid {
 		return null;
 	}
 
-	collideAndResolveCircle(posFrom: NumArray, posTo: NumArray, radius: number): NumArray {
-		const direction = vec2.create();
-		vec2.subtract(direction, posTo, posFrom);
-
+	collideAndResolveCircle(posTo: Vector2, radius: number) {
 		const toCheck: Square[] = [];
-		const minX = (posTo[0] - radius) << 0, maxX = (posTo[0] + radius) << 0;
-		const minZ = (posTo[1] - radius) << 0, maxZ = (posTo[1] + radius) << 0;
+		const minX = (posTo.x - radius) << 0, maxX = (posTo.x + radius) << 0;
+		const minZ = (posTo.y - radius) << 0, maxZ = (posTo.y + radius) << 0;
 
 		for (let tz = minZ; tz <= maxZ; ++tz) {
 			for (let tx = minX; tx <= maxX; ++tx) {
@@ -202,8 +199,7 @@ export class Grid {
 		if (closestSquare && closestDist < radius) {
 			// not perfect but will work for now
 			const planeNormal = closestSquare.normalAtClosestPoint(posTo);
-			vec2.scale(planeNormal, planeNormal, radius - closestDist);
-			vec2.add(posTo, posTo, planeNormal);
+			posTo = posTo.mulAdd(planeNormal, radius - closestDist);
 		}
 
 		return posTo;

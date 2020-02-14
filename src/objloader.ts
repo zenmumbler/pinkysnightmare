@@ -2,6 +2,7 @@
 // (c) 2015 by Arthur Langereis - @zenmumbler
 
 import { Float } from "stardazed/core";
+import { Vector3 } from "stardazed/vector";
 import { VertexAttributeStream, VertexAttributeRole, VertexAttributeMapping, GeometryBuilder } from "stardazed/geometry";
 
 interface OBJPreProcSource {
@@ -50,7 +51,7 @@ function preflightOBJSource(text: string) {
 }
 
 
-function loadObj(preproc: OBJPreProcSource, fixedColour: number[]) {
+function loadObj(preproc: OBJPreProcSource, fixedColour: Vector3) {
 	const positions: Float32Array = new Float32Array(preproc.positionCount * 3);
 	const positionIndexes = new Uint32Array(preproc.vertexCount);
 	const streams: VertexAttributeStream[] = [];
@@ -91,7 +92,7 @@ function loadObj(preproc: OBJPreProcSource, fixedColour: number[]) {
 		includeInMesh: true,
 		mapping: VertexAttributeMapping.SingleValue,
 		attr: { type: Float, width: 3, role: VertexAttributeRole.Colour },
-		values: new Float32Array(fixedColour)
+		values: fixedColour.asTypedArray()
 	});
 
 	const builder = new GeometryBuilder({ positions, positionIndexes, streams });
@@ -161,7 +162,7 @@ function loadObj(preproc: OBJPreProcSource, fixedColour: number[]) {
 	return builder.complete();
 }
 
-export async function loadObjFile(fileName: string, fixedColour: number[]) {
+export async function loadObjFile(fileName: string, fixedColour: Vector3) {
 	const resp = await fetch(fileName);
 	const text = await resp.text();
 	const preproc = preflightOBJSource(text);

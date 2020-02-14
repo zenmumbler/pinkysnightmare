@@ -1,5 +1,5 @@
-import { intRandom, clamp01f } from "stardazed/core";
-import { vec2, vec3, quat, mat4, mat2 } from "stardazed/vector";
+import { intRandom, clamp01f, Easing } from "stardazed/core";
+import { Vector2, Vector3, Matrix, Quaternion } from "stardazed/vector";
 import { $1, show, hide } from "./util";
 import { Scene, EntityDescriptor, SceneRenderer, Entity, EntityBehaviour } from "./scene";
 import { Grid, Direction } from "./grid";
@@ -31,7 +31,7 @@ class Maze extends EntityBehaviour {
 
 class TopDownCamera extends EntityBehaviour {
 	awaken() {
-		mat4.lookAt(this.entity.camera!.viewMatrix, [28.5, 60, 32.5], [28.5, 0, 32.5], [0, 0, 1]);
+		this.entity.camera!.viewMatrix = Matrix.lookAt(new Vector3(28.5, 60, 32.5), new Vector3(28.5, 0, 32.5), Vector3.forward)
 	}
 }
 
@@ -51,39 +51,33 @@ class FixedCamera extends EntityBehaviour {
 		if (! player) {
 			return;
 		}
-		const playerPos = vec3.clone(player.transform.position);
-		const playerPos2D = vec2.fromValues(playerPos[0], playerPos[2]);
+		const playerPos = player.transform.position;
+		const playerPos2D = playerPos.xz;
 
 		// order viewpoints by distance to player
 		this.fixedPoints.sort(function(fpa, fpb) {
-			const distA = vec2.squaredDistance(fpa, playerPos2D);
-			const distB = vec2.squaredDistance(fpb, playerPos2D);
+			const distA = fpa.pos.sqrDistance(playerPos2D);
+			const distB = fpb.pos.sqrDistance(playerPos2D);
 			return distA - distB;
 		});
 
 		let bestCam = null;
 		const minViewDistSq = 3.5 * 3.5;
-		const temp = vec2.create(), f2p = vec2.create();
 
 		for (const camFP of this.fixedPoints) {
 			// from this viewpoint, cast a ray to the player and find the first map wall we hit
-			vec2.subtract(temp, playerPos2D, camFP);
-			vec2.copy(f2p, temp);
-			const sq = this.maze.grid.castRay(camFP, temp);
+			const f2p = playerPos2D.sub(camFP.pos);
+			const sq = this.maze.grid.castRay(camFP.pos, f2p);
 
 			// calc distances from cam to wall and player
-			const camToSquareDistSq = vec2.squaredDistance(camFP, sq!.center);
-			let camToPlayerDistSq = vec2.length(f2p);
-			camToPlayerDistSq = camToPlayerDistSq * camToPlayerDistSq;
+			const camToSquareDistSq = camFP.pos.sqrDistance(sq!.center);
+			const camToPlayerDistSq = f2p.sqrMagnitude;
 
 			// if we have a minimum view distance or the player is closer to the cam than the wall then it wins
 			if (camToSquareDistSq >= minViewDistSq || camToSquareDistSq > camToPlayerDistSq) {
 				bestCam = camFP;
 				break;
 			}
-			// else {
-			// 	console.info("rejecting", vec2.str(camFP), "because", vec2.str(sq.center), "blocks view to", vec2.str(playerPos), camToSquareDistSq, camToPlayerDistSq);
-			// }
 		}
 		if (!bestCam) {
 			// console.info("CAM FIND FAIL");
@@ -91,17 +85,17 @@ class FixedCamera extends EntityBehaviour {
 		}
 
 		// place eye at worldspace of cam and treat the viewpoint looking at the home door as a fixed camera
-		const camY = bestCam.doorCam ? 6 : 5;
-		const camPos = vec3.fromValues(bestCam[0], camY, bestCam[1]);
+		const camY = bestCam.doorCam ? 5.25 : 5;
+		const camPos = new Vector3(bestCam.pos.x, camY, bestCam.pos.y);
 
 		if (bestCam.doorCam) {
-			vec3.set(playerPos, 28.5, 0, 27); // fixed view of the home base
+			playerPos.setElements(28.5, 0, 27); // fixed view of the home base
 		}
 		else {
-			playerPos[1] = 0.3; // player height oscillates but we don't want a wobbly camera
+			playerPos.y = 0.3; // player height oscillates but we don't want a wobbly camera
 		}
 
-		mat4.lookAt(this.entity.camera!.viewMatrix, camPos, playerPos, [0, 1, 0]);
+		this.entity.camera!.viewMatrix = Matrix.lookAt(camPos, playerPos, Vector3.up);
 	}
 }
 
@@ -109,7 +103,7 @@ class Key extends EntityBehaviour {
 	index!: number;
 	found!: boolean;
 
-	static rotAxis = [0, 1, 0];
+	static rotAxis = Vector3.up;
 
 	awaken() {
 		this.index = parseInt(this.entity.name.substr(this.entity.name.length - 1), 10);
@@ -128,12 +122,12 @@ class Key extends EntityBehaviour {
 		if (this.found) {
 			return;
 		}
-		this.transform.setRotation(Key.rotAxis, App.tCur * 1.3);
+		this.transform.rotation = Quaternion.fromAxisAngle(Key.rotAxis, App.tCur * 40);
 	}
 }
 
 class Lock extends EntityBehaviour {
-	static rotAxis = [0, 0, 1];
+	static rotAxis = Vector3.forward;
 	key!: Entity;
 
 	awaken() {
@@ -145,8 +139,8 @@ class Lock extends EntityBehaviour {
 		if ((this.key.behaviour! as Key).found) {
 			return;
 		}
-		const lrt = (Math.PI / 40) * Math.sin(App.tCur * 2);
-		this.transform.setRotation(Lock.rotAxis, lrt);
+		const lrt = 5 * Math.sin(App.tCur * 2);
+		this.transform.rotation = Quaternion.fromAxisAngle(Lock.rotAxis, lrt);
 	}
 }
 
@@ -155,6 +149,7 @@ class Door extends EntityBehaviour {
 	state!: "closed" | "opening" | "open";
 	openT0!: number;
 	keyItems!: Key[];
+	origPos!: Vector3;
 
 	awaken() {
 		this.state = "closed";
@@ -172,6 +167,8 @@ class Door extends EntityBehaviour {
 		this.maze.grid.set(27, 27, true);
 		this.maze.grid.set(28, 27, true);
 		this.maze.grid.set(29, 27, true);
+
+		this.origPos = this.transform.position;
 	}
 
 	onCollide(_other: Entity) {
@@ -190,8 +187,7 @@ class Door extends EntityBehaviour {
 	update(_dt: number) {
 		if (this.state === "opening") {
 			const step = Math.max(0, Math.min(1, (App.tCur - this.openT0) / 4));
-			this.transform.position[0] = 28.5 + ((Math.random() - 0.5) * 0.03);
-			this.transform.position[1] = -3 * step;
+			this.transform.position = new Vector3(this.origPos.x + ((Math.random() - 0.5) * 0.03), -3 * step, this.origPos.z);
 
 			if (step === 1) {
 				// unblock
@@ -220,18 +216,16 @@ class End extends EntityBehaviour {
 }
 
 class Player extends EntityBehaviour {
-	static rotAxis = [0, 1, 0];
-	static turnSpeed = Math.PI; // radians / sec
+	static rotAxis = Vector3.up;
+	static turnSpeed = 180; // degrees / sec
 	static speed = 2.3; // grid units / sec
 
-	moveMat = mat2.create();
-	movePos = vec2.create();
-	viewAngle!: number; // radians
+	viewAngle!: number; // degrees
 	dieT!: number;
 	maze!: Maze;
 
 	awaken() {
-		this.viewAngle = Math.PI / -2; // radians
+		this.viewAngle = 90;
 		this.dieT = -1;
 		this.maze = this.scene.findEntityByName("maze")!.behaviour! as Maze;
 	}
@@ -244,10 +238,12 @@ class Player extends EntityBehaviour {
 	}
 
 	update(dt: number) {
+		let newPos = this.transform.position;
+
 		if (this.dieT >= 0) {
 			const meltStep = (App.tCur - this.dieT) / 4;
 			const meltClamp = clamp01f(meltStep);
-			vec3.set(this.transform.scale,
+			this.transform.scale = new Vector3(
 				0.25 + meltClamp * .75,
 				Math.max(0.1, 0.25 * Math.pow(1 - meltClamp, 2)),
 				0.25 + meltClamp * 0.75
@@ -255,9 +251,9 @@ class Player extends EntityBehaviour {
 
 			if (meltStep >= 2) {
 				// back to original position
-				vec3.set(this.transform.scale, 0.25, 0.25, 0.25);
-				vec3.set(this.transform.position, 28.5, this.transform.position[1], 25);
-				this.viewAngle = Math.PI / -2; // radians
+				this.transform.scale = Vector3.splat(0.25);
+				newPos.setElements(28.5, 0, 25);
+				this.viewAngle = 90;
 				this.dieT = -1;
 			}
 		}
@@ -265,10 +261,10 @@ class Player extends EntityBehaviour {
 			// -- rotation
 			let turnAngle = 0;
 			if (Input.keys[KEY_LEFT] || Input.keys[KEY_A]) {
-				turnAngle = -Player.turnSpeed;
+				turnAngle = Player.turnSpeed;
 			}
 			else if (Input.keys[KEY_RIGHT] || Input.keys[KEY_D]) {
-				turnAngle = Player.turnSpeed;
+				turnAngle = -Player.turnSpeed;
 			}
 			this.viewAngle += turnAngle * dt;
 
@@ -282,67 +278,64 @@ class Player extends EntityBehaviour {
 			}
 
 			if (speed !== 0) {
-				mat2.fromRotation(this.moveMat, this.viewAngle);
-				mat2.scale(this.moveMat, this.moveMat, [speed * dt, speed * dt]);
-				vec2.set(this.movePos, 1, 0);
-				vec2.transformMat2(this.movePos, this.movePos, this.moveMat);
+				const moveMat = Matrix.trs(Vector3.zero, Quaternion.fromAxisAngle(Vector3.up, this.viewAngle), Vector3.splat(speed * dt));
+				const movePos = moveMat.transformPoint(Vector3.right);
 
-				const oldPos = vec2.fromValues(this.transform.position[0], this.transform.position[2]);
-				let newPos: MutNumArray = vec2.create();
-				vec2.add(newPos, oldPos, this.movePos);
+				const oldPos2D = this.transform.position.xz;
+				let newPos2D = oldPos2D.add(movePos.xz);
 
-				newPos = this.maze.grid.collideAndResolveCircle(oldPos, newPos, this.entity.collider!.radius);
+				newPos2D = this.maze.grid.collideAndResolveCircle(newPos2D, this.entity.collider!.radius);
 
 				// warp tunnel
-				if (newPos[0] < 0) {
-					newPos[0] += this.maze.grid.width;
+				if (newPos2D.x < 0) {
+					newPos2D.x += this.maze.grid.width;
 				}
-				if (newPos[0] >= this.maze.grid.width) {
-					newPos[0] -= this.maze.grid.width;
+				if (newPos2D.x >= this.maze.grid.width) {
+					newPos2D.x -= this.maze.grid.width;
 				}
-				this.transform.position[0] = newPos[0];
-				this.transform.position[2] = newPos[1];
+				newPos.xz = newPos2D;
 			}
 		}
 
 		// -- they all float down here
-		this.transform.position[1] = 0.35 + 0.05 * Math.sin(App.tCur * 3);
-		this.transform.setRotation(Player.rotAxis, -this.viewAngle);
+		newPos.y = 0.35 + 0.05 * Math.sin(App.tCur * 3);
+		this.transform.position = newPos;
+		this.transform.rotation = Quaternion.fromAxisAngle(Player.rotAxis, this.viewAngle);
 	}
 }
 
 class Abomination extends EntityBehaviour {
 	static stepDuration = 0.33;
 	static turnDuration = 0.6;
-	static rotAxis = [0, 1, 0];
+	static rotAxis = Vector3.up;
 
 	phase!: "move" | "turn";
 	nextDir!: Direction;
 	pathStep!: number;
 	lastStepT!: number;
 	direction!: Direction;
-	pathPos!: NumArray;
+	pathPos!: Vector2;
 	maze!: Maze;
 
-	static spawnData: { direction: Direction, pathPos: number[] }[] = [
-		// { direction: "north", pathPos: [43, 18] },
-		{ direction: "west", pathPos: [26, 24] },
-		{ direction: "west", pathPos: [13, 4] },
-		{ direction: "south", pathPos: [4, 43] },
-		{ direction: "north", pathPos: [49, 52] },
-		{ direction: "west", pathPos: [28, 36] }
+	static spawnData: { direction: Direction, pathPos: Vector2 }[] = [
+		// { direction: "north", pathPos: new Vector2(43, 18) },
+		{ direction: "west", pathPos: new Vector2(26, 24) },
+		{ direction: "west", pathPos: new Vector2(13, 4) },
+		{ direction: "south", pathPos: new Vector2(4, 43) },
+		{ direction: "north", pathPos: new Vector2(49, 52) },
+		{ direction: "west", pathPos: new Vector2(28, 36) }
 	];
 	static rotations = {
-		north: Math.PI,
-		west: Math.PI / -2,
-		south: 0,
-		east: Math.PI / 2
+		north: Quaternion.fromAxisAngle(Abomination.rotAxis, 180),
+		west: Quaternion.fromAxisAngle(Abomination.rotAxis, -90),
+		south: Quaternion.fromAxisAngle(Abomination.rotAxis, 0),
+		east: Quaternion.fromAxisAngle(Abomination.rotAxis, 90)
 	};
 	static directionVecs = {
-		north: [0, -1],
-		west: [-1, 0],
-		south: [0, 1],
-		east: [1, 0]
+		north: new Vector2(0, -1),
+		west: new Vector2(-1, 0),
+		south: new Vector2(0, 1),
+		east: new Vector2(1, 0)
 	};
 
 	awaken() {
@@ -352,8 +345,8 @@ class Abomination extends EntityBehaviour {
 		this.pathStep = 0;
 		this.lastStepT = App.tCur;
 		this.direction = Abomination.spawnData[index].direction;
-		this.pathPos = vec2.clone(Abomination.spawnData[index].pathPos);
-		this.transform.setPosition(this.pathPos[0], 0, this.pathPos[1]);
+		this.pathPos = Abomination.spawnData[index].pathPos.clone();
+		this.transform.position = new Vector3(this.pathPos.x, 0, this.pathPos.y);
 		this.maze = this.scene.findEntityByName("maze")!.behaviour! as Maze;
 	}
 
@@ -364,16 +357,15 @@ class Abomination extends EntityBehaviour {
 				this.entity.meshRenderer!.mesh = assets.meshes["pac" + (1 - (this.pathStep & 1))];
 				this.lastStepT = App.tCur;
 				const dirVec2 = Abomination.directionVecs[this.direction];
-				const dirVec3 = vec3.fromValues(dirVec2[0], 0, dirVec2[1]);
+				const dirVec3 = new Vector3(dirVec2.x, 0, dirVec2.y);
 
-				const moveOffset = vec3.scale([0, 0, 0], dirVec3, this.pathStep / 2);
-				vec3.add(this.transform.position, [this.pathPos[0] + 0.5, 0, this.pathPos[1] + 0.5], moveOffset);
-
-				this.transform.setRotation(Abomination.rotAxis, Abomination.rotations[this.direction]);
+				const moveOffset = dirVec3.mul(this.pathStep / 2);
+				this.transform.position = new Vector3(this.pathPos.x + 0.5, 0, this.pathPos.y + 0.5).add(moveOffset);
+				this.transform.rotation = Abomination.rotations[this.direction];
 
 				// moved 1 full tile
 				if (this.pathStep === 2) {
-					vec2.add(this.pathPos, this.pathPos, dirVec2);
+					this.pathPos = this.pathPos.add(dirVec2);
 					this.pathStep = 0;
 
 					const exits = this.maze.grid.pathExits(this.pathPos, this.direction);
@@ -387,20 +379,10 @@ class Abomination extends EntityBehaviour {
 			}
 		} // move
 		else if (this.phase === "turn") {
-			let step = Math.max(0, Math.min(1, (App.tCur - this.lastStepT) / Abomination.turnDuration));
-			step = step * step;
-
-			const fromAngle = Abomination.rotations[this.direction];
-			const toAngle = Abomination.rotations[this.nextDir];
-			let rotation = toAngle - fromAngle;
-			if (rotation < (Math.PI * -1.01)) {
-				rotation += Math.PI * 2;
-			}
-			if (rotation > (Math.PI * 1.01)) {
-				rotation -= Math.PI * 2;
-			}
-
-			this.transform.setRotation(Abomination.rotAxis, fromAngle + rotation * step);
+			const step = Math.max(0, Math.min(1, (App.tCur - this.lastStepT) / Abomination.turnDuration));
+			const fromRot = Abomination.rotations[this.direction];
+			const toRot = Abomination.rotations[this.nextDir];
+			this.transform.rotation = Quaternion.slerp(fromRot, toRot, step, Easing.bounceOut);
 
 			if (step >= 1.0) {
 				this.phase = "move";
@@ -420,9 +402,7 @@ export class GameScene extends Scene {
 			{
 				name: "topdowncamera",
 				transform: {
-					position: [28.5, 60, 32.5],
-					rotation: [0, 0, 0, 1],
-					scale: [1, 1, 1]
+					position: new Vector3(28.5, 60, 32.5),
 				},
 				camera: {
 					fovy: 65,
@@ -436,9 +416,7 @@ export class GameScene extends Scene {
 			{
 				name: "fixedcamera",
 				transform: {
-					position: [0, 0, 0],
-					rotation: [0, 0, 0, 1],
-					scale: [1, 1, 1]
+					position: Vector3.zero,
 				},
 				camera: {
 					fovy: 65,
@@ -452,9 +430,7 @@ export class GameScene extends Scene {
 			{
 				name: "maze",
 				transform: {
-					position: [0, 0, 0],
-					rotation: [0, 0, 0, 1],
-					scale: [1, 1, 1]
+					position: Vector3.zero,
 				},
 				meshRenderer: {
 					meshName: "map"
@@ -464,9 +440,8 @@ export class GameScene extends Scene {
 			{
 				name: "player",
 				transform: {
-					position: [28.5, 0.3, 25],
-					rotation: [0, 0, 0, 1],
-					scale: [0.25, 0.25, 0.25]
+					position: new Vector3(28.5, 0.3, 25),
+					scale: new Vector3(0.25, 0.25, 0.25)
 				},
 				meshRenderer: {
 					meshName: "spookje"
@@ -481,9 +456,8 @@ export class GameScene extends Scene {
 			{
 				name: "key0",
 				transform: {
-					position: [4.5, .2, 8.5],
-					rotation: [0, 0, 0, 1],
-					scale: [0.25, 0.25, 0.25]
+					position: new Vector3(4.5, .2, 8.5),
+					scale: new Vector3(0.25, 0.25, 0.25)
 				},
 				meshRenderer: {
 					meshName: "key",
@@ -498,9 +472,8 @@ export class GameScene extends Scene {
 			{
 				name: "key1",
 				transform: {
-					position: [52.5, .2, 8.5],
-					rotation: [0, 0, 0, 1],
-					scale: [0.25, 0.25, 0.25]
+					position: new Vector3(52.5, .2, 8.5),
+					scale: new Vector3(0.25, 0.25, 0.25)
 				},
 				meshRenderer: {
 					meshName: "key"
@@ -515,9 +488,8 @@ export class GameScene extends Scene {
 			{
 				name: "key2",
 				transform: {
-					position: [4.5, .2, 48.5],
-					rotation: [0, 0, 0, 1],
-					scale: [0.25, 0.25, 0.25]
+					position: new Vector3(4.5, .2, 48.5),
+					scale: new Vector3(0.25, 0.25, 0.25)
 				},
 				meshRenderer: {
 					meshName: "key"
@@ -532,9 +504,8 @@ export class GameScene extends Scene {
 			{
 				name: "key3",
 				transform: {
-					position: [52.5, .2, 48.5],
-					rotation: [0, 0, 0, 1],
-					scale: [0.25, 0.25, 0.25]
+					position: new Vector3(52.5, .2, 48.5),
+					scale: new Vector3(0.25, 0.25, 0.25)
 				},
 				meshRenderer: {
 					meshName: "key"
@@ -549,9 +520,8 @@ export class GameScene extends Scene {
 			{
 				name: "lock0",
 				transform: {
-					position: [29.3, 2.3, 26.8],
-					rotation: [0, 0, 0, 1],
-					scale: [0.005, 0.005, 0.005]
+					position: new Vector3(29.3, 2.3, 26.8),
+					scale: new Vector3(0.005, 0.005, 0.005)
 				},
 				meshRenderer: {
 					meshName: "lock"
@@ -561,9 +531,8 @@ export class GameScene extends Scene {
 			{
 				name: "lock1",
 				transform: {
-					position: [27.5, 2.3, 26.8],
-					rotation: [0, 0, 0, 1],
-					scale: [0.005, 0.005, 0.005]
+					position: new Vector3(27.5, 2.3, 26.8),
+					scale: new Vector3(0.005, 0.005, 0.005)
 				},
 				meshRenderer: {
 					meshName: "lock"
@@ -573,9 +542,8 @@ export class GameScene extends Scene {
 			{
 				name: "lock2",
 				transform: {
-					position: [29.3, 0.6, 26.8],
-					rotation: [0, 0, 0, 1],
-					scale: [0.005, 0.005, 0.005]
+					position: new Vector3(29.3, 0.6, 26.8),
+					scale: new Vector3(0.005, 0.005, 0.005)
 				},
 				meshRenderer: {
 					meshName: "lock"
@@ -585,9 +553,8 @@ export class GameScene extends Scene {
 			{
 				name: "lock3",
 				transform: {
-					position: [27.5, 0.6, 26.8],
-					rotation: [0, 0, 0, 1],
-					scale: [0.005, 0.005, 0.005]
+					position: new Vector3(27.5, 0.6, 26.8),
+					scale: new Vector3(0.005, 0.005, 0.005)
 				},
 				meshRenderer: {
 					meshName: "lock"
@@ -597,9 +564,7 @@ export class GameScene extends Scene {
 			{
 				name: "door",
 				transform: {
-					position: [28.5, 0, 27],
-					rotation: [0, 0, 0, 1],
-					scale: [1, 1, 1],
+					position: new Vector3(28.5, 0, 27),
 				},
 				meshRenderer: {
 					meshName: "door",
@@ -615,9 +580,7 @@ export class GameScene extends Scene {
 			{
 				name: "end",
 				transform: {
-					position: [28.5, 0, 29.5],
-					rotation: quat.create(),
-					scale: [1, 1, 1]
+					position: new Vector3(28.5, 0, 29.5),
 				},
 				collider: {
 					radius: 1,
@@ -629,9 +592,8 @@ export class GameScene extends Scene {
 			{
 				name: "pac0",
 				transform: {
-					position: [0, 0, 0],
-					rotation: [0, 0, 0, 1],
-					scale: [1.25, 1.25, 1.25],
+					position: Vector3.zero,
+					scale: new Vector3(1.25, 1.25, 1.25),
 				},
 				meshRenderer: {
 					meshName: "pac0",
@@ -647,9 +609,8 @@ export class GameScene extends Scene {
 			{
 				name: "pac1",
 				transform: {
-					position: [0, 0, 0],
-					rotation: [0, 0, 0, 1],
-					scale: [1.25, 1.25, 1.25],
+					position: Vector3.zero,
+					scale: new Vector3(1.25, 1.25, 1.25),
 				},
 				meshRenderer: {
 					meshName: "pac0",
@@ -665,9 +626,8 @@ export class GameScene extends Scene {
 			{
 				name: "pac2",
 				transform: {
-					position: [0, 0, 0],
-					rotation: [0, 0, 0, 1],
-					scale: [1.25, 1.25, 1.25],
+					position: Vector3.zero,
+					scale: new Vector3(1.25, 1.25, 1.25),
 				},
 				meshRenderer: {
 					meshName: "pac0",
@@ -683,9 +643,8 @@ export class GameScene extends Scene {
 			{
 				name: "pac3",
 				transform: {
-					position: [0, 0, 0],
-					rotation: [0, 0, 0, 1],
-					scale: [1.25, 1.25, 1.25],
+					position: Vector3.zero,
+					scale: new Vector3(1.25, 1.25, 1.25),
 				},
 				meshRenderer: {
 					meshName: "pac0",
@@ -701,9 +660,8 @@ export class GameScene extends Scene {
 			{
 				name: "pac4",
 				transform: {
-					position: [0, 0, 0],
-					rotation: [0, 0, 0, 1],
-					scale: [1.25, 1.25, 1.25],
+					position: Vector3.zero,
+					scale: new Vector3(1.25, 1.25, 1.25),
 				},
 				meshRenderer: {
 					meshName: "pac0",
@@ -731,7 +689,7 @@ export class GameScene extends Scene {
 		assets.modelProgram = renderer.createProgram("standard");
 		assets.texturedProgram = renderer.createProgram("textured");
 
-		async function meshFromOBJFile(filePath: string, fixedColour: number[]) {
+		async function meshFromOBJFile(filePath: string, fixedColour: Vector3) {
 			const geom = await loadObjFile(filePath, fixedColour);
 			return renderer.createMesh(geom);
 		}

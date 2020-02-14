@@ -1,5 +1,5 @@
 import { UInt8 } from "stardazed/core";
-import { mat4 } from "stardazed/vector";
+import { Matrix } from "stardazed/vector";
 import { Geometry, VertexAttributeRole, StepMode } from "stardazed/geometry";
 import { assert } from "./util";
 import { loadImageData } from "./asset";
@@ -13,11 +13,11 @@ export interface RenderTexture {
 }
 
 export interface RenderMesh {
-	draw(modelViewMatrix: Float32Array, program: RenderProgram, texture?: RenderTexture): void;
+	draw(modelViewMatrix: Matrix, program: RenderProgram, texture?: RenderTexture): void;
 }
 
 export interface RenderCommand {
-	modelMatrix: Float32Array;
+	modelMatrix: Matrix;
 	mesh: RenderMesh;
 	program: RenderProgram;
 	texture?: RenderTexture;
@@ -36,7 +36,7 @@ export interface Renderer {
 	createTexture(fileName: string): Promise<RenderTexture>;
 	createProgram(name: string): RenderProgram;
 
-	createPass(projMatrix: Float32Array, viewMatrix: Float32Array, fogLimits: Float32List): RenderPass;
+	createPass(projMatrix: Matrix, viewMatrix: Matrix, fogLimits: Float32List): RenderPass;
 }
 
 // ------- GL
@@ -82,13 +82,13 @@ class GLMesh {
 		this.vaos = new Map();
 	}
 
-	draw(modelViewMatrix: Float32Array, program: RenderProgram, texture: RenderTexture | undefined) {
+	draw(modelViewMatrix: Matrix, program: RenderProgram, texture: RenderTexture | undefined) {
 		const gl = this.gl;
 		const extVAO = gl.getExtension("OES_vertex_array_object")!;
 		let vao = this.vaos.get(program);
 
 		const glProgram  = program.program as StandardProgram;
-		gl.uniformMatrix4fv(glProgram.mvMatrixUniform, false, modelViewMatrix);
+		gl.uniformMatrix4fv(glProgram.mvMatrixUniform, false, modelViewMatrix.data);
 
 		if (! vao) {
 			vao = extVAO.createVertexArrayOES()!;
@@ -240,11 +240,11 @@ export class WebGLRenderer implements Renderer {
 		return new GLMesh(this.gl, geom);
 	}
 
-	createPass(projMatrix: Float32Array, viewMatrix: Float32Array, fogLimits: Float32List) {
+	createPass(projMatrix: Matrix, viewMatrix: Matrix, fogLimits: Float32List) {
 		const gl = this.gl;
 		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 		const cmds = new Map<RenderProgram, RenderCommand[]>();
-		const mvMatrix = mat4.create();
+		let mvMatrix: Matrix;
 
 		const pass: RenderPass = {
 			draw(cmd: RenderCommand) {
@@ -257,10 +257,10 @@ export class WebGLRenderer implements Renderer {
 				for (const [program, cmdList] of cmds) {
 					const glProgram = program.program as StandardProgram;
 					gl.useProgram(glProgram);
-					gl.uniformMatrix4fv(glProgram.projMatrixUniform, false, projMatrix);
+					gl.uniformMatrix4fv(glProgram.projMatrixUniform, false, projMatrix.data);
 					gl.uniform2fv(glProgram.fogLimitsUniform, fogLimits);
 					for (const cmd of cmdList) {
-						mat4.multiply(mvMatrix, viewMatrix, cmd.modelMatrix);
+						mvMatrix = viewMatrix.mul(cmd.modelMatrix);
 						cmd.mesh.draw(mvMatrix, program, cmd.texture);
 					}
 				}
@@ -371,9 +371,9 @@ export class WebGPURenderer implements Renderer {
 		let bindGroup: GPUBindGroup | undefined;
 
 		return {
-			draw(modelViewMatrix: Float32Array, program: RenderProgram, texture?: RenderTexture) {
+			draw(modelViewMatrix: Matrix, program: RenderProgram, texture?: RenderTexture) {
 				if (uniformBuffer === undefined) {
-					uniformBuffer = renderer.createBufferWithContents(modelViewMatrix, GPUBufferUsageFlags.UNIFORM | GPUBufferUsageFlags.MAP_WRITE);
+					uniformBuffer = renderer.createBufferWithContents(modelViewMatrix.data, GPUBufferUsageFlags.UNIFORM | GPUBufferUsageFlags.MAP_WRITE);
 				}
 
 				const module = program.program.module as GPUShaderModule;
@@ -534,12 +534,12 @@ export class WebGPURenderer implements Renderer {
 		return { program: { module, bindGroupLayout } };
 	}
 
-	createPass(projMatrix: Float32Array, viewMatrix: Float32Array, _fogLimits: Float32List): RenderPass {
+	createPass(projMatrix: Matrix, viewMatrix: Matrix, _fogLimits: Float32List): RenderPass {
 		const encoder = this.device.createCommandEncoder();
 		const rpd = this.rpd;
 		rpd.colorAttachments[0].attachment = this.swapChain.getCurrentTexture().createDefaultView();
 		const pass = encoder.beginRenderPass(rpd);
-		const pv = mat4.multiply(new Float32Array(16), projMatrix, viewMatrix);
+		const pv = projMatrix.mul(viewMatrix);
 
 		const renderer = this;
 		return {

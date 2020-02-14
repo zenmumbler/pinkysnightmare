@@ -1,14 +1,13 @@
-import { deg2rad } from "stardazed/core";
-import { mat4, vec2, vec3, quat, setIndexedMat4, setIndexedVec3, setIndexedVec4, copyIndexedVec3Into, copyIndexedVec4Into } from "stardazed/vector";
+import { Vector3, Matrix, Quaternion } from "stardazed/vector";
 import { RenderMesh, RenderProgram, RenderTexture, Renderer } from "./render";
 import { Assets } from "./asset";
 
 const MAX_ENTITIES = 64;
 
 export interface TransformDescriptor {
-	readonly position: NumArray;
-	readonly rotation: NumArray;
-	readonly scale: NumArray;
+	readonly position: Vector3;
+	readonly rotation?: Quaternion;
+	readonly scale?: Vector3;
 }
 
 export type TXID = number & {
@@ -21,52 +20,55 @@ export class Tx {
 	private readonly scales = new Float32Array(MAX_ENTITIES * 3);
 	private readonly modelMatrices = new Float32Array(MAX_ENTITIES * 16);
 
-	private readonly p3 = vec3.fromValues(0, 0, 0);
-	private readonly s3 = vec3.fromValues(1, 1, 1);
-	private readonly q4 = quat.create();
-	private readonly m44 = mat4.create();
+	private readonly p3 = Vector3.zero;
+	private readonly s3 = Vector3.one;
+	private readonly q4 = Quaternion.identity;
+	private readonly m44 = Matrix.identity;
 
 	private next_ = 0;
 
 	create(desc: TransformDescriptor): TXID {
 		const id = this.next_++;
-		setIndexedVec3(this.positions, id, desc.position);
-		setIndexedVec4(this.rotations, id, desc.rotation);
-		setIndexedVec3(this.scales, id, desc.scale);
+		desc.position.writeToArray(this.positions, id * 3);
+		(desc.rotation || Quaternion.identity).writeToArray(this.rotations, id * 4);
+		(desc.scale || Vector3.one).writeToArray(this.scales, id * 3);
 		this.updateMM(id);
 		return id;
 	}
 
 	setPosition(id: TXID, x: number, y: number, z: number) {
-		this.p3[0] = x;
-		this.p3[1] = y;
-		this.p3[2] = z;
-		setIndexedVec3(this.positions, id, this.p3);
+		this.p3.x = x;
+		this.p3.y = y;
+		this.p3.z = z;
+		this.p3.writeToArray(this.positions, id * 3);
 		this.updateMM(id);
 	}
-	setPosition3(id: TXID, v3: NumArray) {
-		setIndexedVec3(this.positions, id, v3);
+	setPosition3(id: TXID, v3: Vector3) {
+		v3.writeToArray(this.positions, id * 3);
 		this.updateMM(id);
 	}
-	setRotation(id: TXID, axis: NumArray, angle: number) {
-		const q = quat.setAxisAngle(this.q4, axis, angle);
-		setIndexedVec4(this.rotations, id, q);
+	setRotation(id: TXID, q: Quaternion) {
+		q.writeToArray(this.rotations, id * 4);
 		this.updateMM(id);
 	}
-	setScale3(id: TXID, v3: NumArray) {
-		setIndexedVec3(this.scales, id, v3);
+	setScale3(id: TXID, v3: Vector3) {
+		v3.writeToArray(this.scales, id * 3);
 		this.updateMM(id);
 	}
 	setUniformScale(id: TXID, s: number) {
-		this.s3[0] = s;
-		this.s3[1] = s;
-		this.s3[2] = s;
-		setIndexedVec3(this.positions, id, this.s3);
+		this.s3.x = s;
+		this.s3.y = s;
+		this.s3.z = s;
+		this.s3.writeToArray(this.positions, id * 3);
 		this.updateMM(id);
 	}
 
 	position(id: number) {
 		return this.positions.subarray(id * 3, (id + 1) * 3);
+	}
+
+	rotation(id: number) {
+		return this.rotations.subarray(id * 4, (id + 1) * 4);
 	}
 
 	scale(id: number) {
@@ -78,11 +80,11 @@ export class Tx {
 	}
 
 	private updateMM(id: TXID) {
-		copyIndexedVec3Into(this.p3, this.positions, id);
-		copyIndexedVec4Into(this.q4, this.rotations, id);
-		copyIndexedVec3Into(this.s3, this.scales, id);
-		mat4.fromRotationTranslationScale(this.m44, this.q4, this.p3, this.s3);
-		setIndexedMat4(this.modelMatrices, id, this.m44);
+		this.p3.setFromArray(this.positions, id * 3);
+		this.q4.setFromArray(this.rotations, id * 4);
+		this.s3.setFromArray(this.scales, id * 3);
+		this.m44.setTRS(this.p3, this.q4, this.s3);
+		this.m44.writeToArray(this.modelMatrices, id * 16);
 	}
 }
 
@@ -91,6 +93,7 @@ const TransformComponent = new Tx();
 export class Transform {
 	private readonly id: TXID;
 	private posRef: Float32Array | undefined;
+	private rotRef: Float32Array | undefined;
 	private scaleRef: Float32Array | undefined;
 	private modelRef: Float32Array | undefined;
 
@@ -102,37 +105,37 @@ export class Transform {
 		if (this.posRef === undefined) {
 			this.posRef = TransformComponent.position(this.id);
 		}
-		return this.posRef;
+		return Vector3.fromArray(this.posRef);
+	}
+	set position(p: Vector3) {
+		TransformComponent.setPosition3(this.id, p);
+	}
+
+	get rotation() {
+		if (this.rotRef === undefined) {
+			this.rotRef = TransformComponent.rotation(this.id);
+		}
+		return Quaternion.fromArray(this.rotRef);
+	}
+	set rotation(q: Quaternion) {
+		TransformComponent.setRotation(this.id, q);
 	}
 
 	get scale() {
 		if (this.scaleRef === undefined) {
 			this.scaleRef = TransformComponent.scale(this.id);
 		}
-		return this.scaleRef;
+		return Vector3.fromArray(this.scaleRef);
+	}
+	set scale(s: Vector3) {
+		TransformComponent.setScale3(this.id, s);
 	}
 
 	get modelMatrix() {
 		if (this.modelRef === undefined) {
 			this.modelRef = TransformComponent.modelMatrix(this.id);
 		}
-		return this.modelRef;
-	}
-
-	setPosition(x: number, y: number, z: number) {
-		TransformComponent.setPosition(this.id, x, y, z);
-	}
-	setPosition3(v3: NumArray) {
-		TransformComponent.setPosition3(this.id, v3);
-	}
-	setRotation(axis: NumArray, angle: number) {
-		TransformComponent.setRotation(this.id, axis, angle);
-	}
-	setScale3(v3: NumArray) {
-		TransformComponent.setScale3(this.id, v3);
-	}
-	setUniformScale(s: number) {
-		TransformComponent.setUniformScale(this.id, s);
+		return Matrix.fromArray(this.modelRef);
 	}
 }
 
@@ -145,17 +148,17 @@ export interface CameraDescriptor {
 }
 
 export class Camera {
-	readonly projectionMatrix = mat4.create();
-	readonly viewMatrix = mat4.create();
+	projectionMatrix: Matrix;
+	viewMatrix: Matrix;
 	readonly fogLimits = new Float32Array(2);
 
-	constructor(cd: CameraDescriptor, origin: NumArray, vpWidth: number, vpHeight: number) {
-		mat4.perspective(this.projectionMatrix, deg2rad(cd.fovy), vpWidth / vpHeight, cd.zNear, cd.zFar);
+	constructor(cd: CameraDescriptor, origin: Vector3, vpWidth: number, vpHeight: number) {
+		this.projectionMatrix = Matrix.perspective(cd.fovy, vpWidth / vpHeight, cd.zNear, cd.zFar);
 		this.fogLimits[0] = cd.fogNear;
 		this.fogLimits[1] = cd.fogFar;
 
-		const target = vec3.add([0, 0, 0], origin, [0, 0, 1]);
-		mat4.lookAt(this.viewMatrix, origin, target, [0, 1, 0]);
+		const target = origin.add(Vector3.forward);
+		this.viewMatrix = Matrix.lookAt(origin, target, Vector3.up);
 	}
 }
 
@@ -262,7 +265,7 @@ export class Scene {
 				this.colliders.push(e);
 			}
 			if (ed.camera) {
-				const pos = (ed.transform) ? ed.transform.position : [0, 0, 0];
+				const pos = (ed.transform) ? ed.transform.position : Vector3.zero;
 				e.camera = new Camera(ed.camera, pos, canvas.width, canvas.height);
 				this.cameras.push(e);
 			}
@@ -303,7 +306,7 @@ export class Scene {
 			if (! colliderA) {
 				continue;
 			}
-			const posA2D = [posA[0], posA[2]];
+			const posA2D = posA.xz;
 			for (let cb = ca + 1; cb < collCount; ++cb) {
 				const collEntB = this.colliders[cb];
 				const colliderB = collEntB.collider;
@@ -314,9 +317,9 @@ export class Scene {
 				const a2b = (colliderB.collisionType & colliderA.collisionMask);
 				const b2a = (colliderA.collisionType & colliderB.collisionMask);
 				if (a2b || b2a) {
-					const posB2D = [posB[0], posB[2]];
+					const posB2D = posB.xz;
 					const maxRadius = Math.max(colliderA.radius, colliderB.radius);
-					if (vec2.distance(posA2D, posB2D) < maxRadius) {
+					if (posA2D.distance(posB2D) < maxRadius) {
 						if (a2b) {
 							collEntA.behaviour?.onCollide?.(collEntB);
 						}
