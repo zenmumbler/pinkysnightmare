@@ -8,7 +8,7 @@ import { RenderMesh, Renderer } from "./render";
 export interface CameraPoint {
 	pos: Vector2;
 	doorCam: boolean;
-};
+}
 
 export interface MapData {
 	cameras: CameraPoint[];

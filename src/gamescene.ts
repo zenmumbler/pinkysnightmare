@@ -31,7 +31,7 @@ class Maze extends EntityBehaviour {
 
 class TopDownCamera extends EntityBehaviour {
 	awaken() {
-		this.entity.camera!.viewMatrix = Matrix.lookAt(new Vector3(28.5, 60, 32.5), new Vector3(28.5, 0, 32.5), Vector3.forward)
+		this.entity.camera!.viewMatrix = Matrix.lookAt(new Vector3(28.5, 60, 32.5), new Vector3(28.5, 0, 32.5), Vector3.forward);
 	}
 }
 
@@ -238,7 +238,7 @@ class Player extends EntityBehaviour {
 	}
 
 	update(dt: number) {
-		let newPos = this.transform.position;
+		const newPos = this.transform.position;
 
 		if (this.dieT >= 0) {
 			const meltStep = (App.tCur - this.dieT) / 4;
