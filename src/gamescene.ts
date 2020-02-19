@@ -31,7 +31,8 @@ class Maze extends EntityBehaviour {
 
 class TopDownCamera extends EntityBehaviour {
 	awaken() {
-		this.entity.camera!.viewMatrix = Matrix.lookAt(new Vector3(28.5, 60, 32.5), new Vector3(28.5, 0, 32.5), Vector3.forward);
+		this.entity.transform.position = new Vector3(28.5, 60, 32.5);
+		this.entity.transform.lookAt(new Vector3(28.5, 0, 32.5), Vector3.forward);
 	}
 }
 
@@ -95,7 +96,8 @@ class FixedCamera extends EntityBehaviour {
 			playerPos.y = 0.3; // player height oscillates but we don't want a wobbly camera
 		}
 
-		this.entity.camera!.viewMatrix = Matrix.lookAt(camPos, playerPos, Vector3.up);
+		this.entity.transform.position = camPos;
+		this.entity.transform.lookAt(playerPos, Vector3.up);
 	}
 }
 

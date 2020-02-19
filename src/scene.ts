@@ -79,6 +79,14 @@ export class Tx {
 		return this.modelMatrices.subarray(id * 16, (id + 1) * 16);
 	}
 
+	lookAt(id: number, target: Vector3, worldUp: Vector3) {
+		this.p3.setFromArray(this.positions, id * 3);
+		const m = Matrix.lookAt(this.p3, target, worldUp);
+		const q = m.rotation;
+		q.writeToArray(this.rotations, id * 4);
+		m.writeToArray(this.modelMatrices, id * 16);
+	}
+
 	private updateMM(id: TXID) {
 		this.p3.setFromArray(this.positions, id * 3);
 		this.q4.setFromArray(this.rotations, id * 4);
@@ -136,6 +144,10 @@ export class Transform {
 			this.modelRef = TransformComponent.modelMatrix(this.id);
 		}
 		return Matrix.fromArray(this.modelRef);
+	}
+
+	lookAt(target: Vector3, worldUp = Vector3.up) {
+		TransformComponent.lookAt(this.id, target, worldUp);
 	}
 }
 
