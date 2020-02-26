@@ -2,6 +2,20 @@
 // by @zenmumbler
 // Up-to-date with spec as of 2020-Feb-7
 
+// numeric type aliases
+type GPUBufferDynamicOffset = number; // uint32
+type GPUFenceValue = number; // uint64, use bigint?
+type GPUStencilValue = number; // uint32
+type GPUSampleMask = number; // uint32
+type GPUDepthBias = number; // int32 (signed)
+
+type GPUSize64 = number; // uint64, use bigint?
+type GPUIntegerCoordinate = number; // uint32
+type GPUIndex32 = number; // uint32
+type GPUSize32 = number; // uint32
+type GPUSignedOffset32 = number; // int32 (signed)
+
+
 interface GPUObjectDescriptorBase {
 	label?: string;
 }
@@ -10,8 +24,6 @@ interface GPUObjectBase {
 	label?: string;
 }
 
-type GPUBufferSize = number; // unsigned long long -> bigint?
-
 type GPUColor = number[] | {
 	r: number;
 	g: number;
@@ -19,21 +31,21 @@ type GPUColor = number[] | {
 	a: number;
 };
 
-type GPUOrigin2D = number[] | {
-	x?: number;
-	y?: number;
+type GPUOrigin2D = GPUIntegerCoordinate[] | {
+	x?: GPUIntegerCoordinate;
+	y?: GPUIntegerCoordinate;
 };
 
-type GPUOrigin3D = number[] | {
-	x?: number;
-	y?: number;
-	z?: number;
+type GPUOrigin3D = GPUIntegerCoordinate[] | {
+	x?: GPUIntegerCoordinate;
+	y?: GPUIntegerCoordinate;
+	z?: GPUIntegerCoordinate;
 };
 
-type GPUExtent3D = number[] | {
-	width: number;
-	height: number;
-	depth: number;
+type GPUExtent3D = GPUIntegerCoordinate[] | {
+	width: GPUIntegerCoordinate;
+	height: GPUIntegerCoordinate;
+	depth: GPUIntegerCoordinate;
 };
 
 type GPUExtensionTextureFormat =
@@ -105,7 +117,7 @@ declare const enum GPUBufferUsageFlags {
 }
 
 interface GPUBufferDescriptor extends GPUObjectDescriptorBase {
-	size: GPUBufferSize;
+	size: GPUSize64;
 	usage: GPUBufferUsageFlags;
 }
 
@@ -131,9 +143,9 @@ declare const enum GPUTextureUsageFlags {
 
 interface GPUTextureDescriptor extends GPUObjectDescriptorBase {
 	size: GPUExtent3D;
-	arrayLayerCount?: number;
-	mipLevelCount?: number;
-	sampleCount?: number;
+	arrayLayerCount?: GPUIntegerCoordinate;
+	mipLevelCount?: GPUIntegerCoordinate;
+	sampleCount?: GPUSize32;
 	dimension?: GPUTextureDimension;
 	format: GPUTextureFormat;
 	usage: GPUTextureUsageFlags;
@@ -155,10 +167,10 @@ interface GPUTextureViewDescriptor extends GPUObjectDescriptorBase {
 	format?: GPUTextureFormat;
 	dimension?: GPUTextureViewDimension;
 	aspect?: GPUTextureAspect;
-	baseMipLevel?: number;
-	mipLevelCount?: number;
-	baseArrayLayer?: number;
-	arrayLayerCount?: number;
+	baseMipLevel?: GPUIntegerCoordinate;
+	mipLevelCount?: GPUIntegerCoordinate;
+	baseArrayLayer?: GPUIntegerCoordinate;
+	arrayLayerCount?: GPUIntegerCoordinate;
 }
 
 interface GPUTextureView extends GPUObjectBase {
@@ -202,7 +214,7 @@ declare const enum GPUShaderStageFlags {
 type GPUBindingType = "uniform-buffer" | "storage-buffer" | "readonly-storage-buffer" | "sampler" | "sampled-texture" | "storage-texture";
 
 interface GPUBindGroupLayoutBinding {
-	binding: number;
+	binding: GPUIndex32;
 	visibility: GPUShaderStageFlags;
 	type: GPUBindingType;
 	textureDimension?: GPUTextureDimension;
@@ -223,14 +235,14 @@ interface GPUBindGroupLayout extends GPUObjectBase {
 
 interface GPUBufferBinding {
 	buffer: GPUBuffer;
-	offset?: GPUBufferSize;
-	size?: GPUBufferSize;
+	offset?: GPUSize64;
+	size?: GPUSize64;
 }
 
 type GPUBindingResource = GPUSampler | GPUTextureView | GPUBufferBinding;
 
 interface GPUBindGroupBinding {
-	binding: number;
+	binding: GPUIndex32;
 	resource: GPUBindingResource;
 }
 
@@ -332,7 +344,7 @@ type GPUCullMode = "none" | "front" | "back";
 interface GPURasterizationStateDescriptor {
 	frontFace?: GPUFrontFace;
 	cullMode?: GPUCullMode;
-	depthBias?: number;
+	depthBias?: GPUDepthBias;
 	depthBiasSlopeScale?: number;
 	depthBiasClamp?: number;
 }
@@ -353,8 +365,8 @@ interface GPUDepthStencilStateDescriptor {
 	depthCompare?: GPUCompareFunction;
 	stencilFront?: GPUStencilStateFaceDescriptor;
 	stencilBack?: GPUStencilStateFaceDescriptor;
-	stencilReadMask?: number;
-	stencilWriteMask?: number;
+	stencilReadMask?: GPUStencilValue;
+	stencilWriteMask?: GPUStencilValue;
 }
 
 
@@ -378,15 +390,15 @@ type GPUInputStepMode = "vertex" | "instance";
 
 interface GPUVertexAttributeDescriptor {
 	format: GPUVertexFormat;
-	offset: GPUBufferSize;
-	shaderLocation: number;
+	offset: GPUSize64;
+	shaderLocation: GPUIndex32;
 }
 
 interface GPUVertexBufferLayoutDescriptor {
 	// in spec
-	arrayStride?: number;
+	arrayStride?: GPUSize64;
 	// in impl
-	stride?: number;
+	stride?: GPUSize64;
 	// in spec
 	attributes?: GPUVertexAttributeDescriptor[];
 	// in impl
@@ -413,8 +425,8 @@ interface GPURenderPipelineDescriptor extends GPUPipelineDescriptorBase {
 	vertexState?: GPUVertexStateDescriptor;
 	// in impl
 	vertexInput?: GPUVertexStateDescriptor;
-	sampleCount?: number;
-	sampleMask?: number;
+	sampleCount?: GPUSize32;
+	sampleMask?: GPUSampleMask;
 	alphaToCoverageEnabled?: boolean;
 }
 
@@ -436,15 +448,15 @@ interface GPUCommandBuffer extends GPUObjectBase {
 
 interface GPUBufferCopyView {
 	buffer: GPUBuffer;
-	offset?: GPUBufferSize;
-	rowPitch?: number;
-	imageHeight?: number;
+	offset?: GPUSize64;
+	rowPitch?: GPUSize32;
+	imageHeight?: GPUSize32;
 }
 
 interface GPUTextureCopyView {
 	texture: GPUTexture;
-	mipLevel?: number;
-	arrayLayer?: number;
+	mipLevel?: GPUIntegerCoordinate;
+	arrayLayer?: GPUIntegerCoordinate;
 	origin?: GPUOrigin3D;
 }
 
@@ -454,10 +466,10 @@ interface GPUImageBitmapCopyView {
 }
 
 interface GPUProgrammablePassEncoder {
-	setBindGroup(index: number, bindGroup: GPUBindGroup, dynamicOffets?: number[]): void;
-	setBindGroup(index: number, bindGroup: GPUBindGroup, dynamicOffsetsData: Uint32Array,
-		dynamicOffsetsDataStart: number, dynamicOffsetsDataLength: number): void;
-	
+	setBindGroup(index: GPUIndex32, bindGroup: GPUBindGroup, dynamicOffets?: GPUBufferDynamicOffset[]): void;
+	setBindGroup(index: GPUIndex32, bindGroup: GPUBindGroup, dynamicOffsetsData: Uint32Array,
+		dynamicOffsetsDataStart: GPUSize64, dynamicOffsetsDataLength: GPUSize64): void;
+
 	pushDebugGroup(groupLabel: string): void;
 	popDebugGroup(): void;
 	insertDebugMarker(markerLabel: string): void;
@@ -469,8 +481,8 @@ interface GPUComputePassDescriptor extends GPUObjectDescriptorBase {
 
 interface GPUComputePassEncoder extends GPUObjectBase, GPUProgrammablePassEncoder {
 	setPipeline(pipeline: GPUComputePipeline): void;
-	dispatch(x: number, y?: number, z?: number): void;
-	dispatchIndirect(indirectBuffer: GPUBuffer, indirectOffset: GPUBufferSize): void;
+	dispatch(x: GPUSize32, y?: GPUSize32, z?: GPUSize32): void;
+	dispatchIndirect(indirectBuffer: GPUBuffer, indirectOffset: GPUSize64): void;
 
 	endPass(): void;
 }
@@ -479,16 +491,16 @@ interface GPUComputePassEncoder extends GPUObjectBase, GPUProgrammablePassEncode
 interface GPURenderEncodeBase {
 	setPipeline(pipeline: GPURenderPipeline): void;
 
-	setIndexBuffer(buffer: GPUBuffer, offset?: GPUBufferSize): void;
-	setVertexBuffer(slot: number, buffer: GPUBuffer, offset?: GPUBufferSize): void;
+	setIndexBuffer(buffer: GPUBuffer, offset?: GPUSize64): void;
+	setVertexBuffer(slot: GPUIndex32, buffer: GPUBuffer, offset?: GPUSize64): void;
 	// in impl
-	setVertexBuffers(unknown: number, buffers: GPUBuffer[], offsets: number[]): void;
+	setVertexBuffers(unknown: number, buffers: GPUBuffer[], offsets: GPUSize64[]): void;
 
-	draw(vertexCount: number, instanceCount: number, firstVertex: number, firstInstance: number): void;
-	drawIndexed(indexCount: number, instanceCount: number, firstIndex: number, baseVertex: number, firstInstance: number): void;
+	draw(vertexCount: GPUSize32, instanceCount: GPUSize32, firstVertex: GPUSize32, firstInstance: GPUSize32): void;
+	drawIndexed(indexCount: GPUSize32, instanceCount: GPUSize32, firstIndex: GPUSize32, baseVertex: GPUSignedOffset32, firstInstance: GPUSize32): void;
 
-	drawIndirect(indirectBuffer: GPUBuffer, indirectOffset: GPUBufferSize): void;
-	drawIndexedIndirect(indirectBuffer: GPUBuffer, indirectOffset: GPUBufferSize): void;
+	drawIndirect(indirectBuffer: GPUBuffer, indirectOffset: GPUSize64): void;
+	drawIndexedIndirect(indirectBuffer: GPUBuffer, indirectOffset: GPUSize64): void;
 }
 
 type GPULoadOp = "load";
@@ -521,7 +533,7 @@ interface GPURenderPassDepthStencilAttachmentDescriptor {
 	depthStoreOp: GPUStoreOp;
 
 	// mandatory in spec, optional in impl
-	stencilLoadValue?: GPULoadOp | number;
+	stencilLoadValue?: GPULoadOp | GPUStencilValue;
 	// mandatory in spec, optional in impl
 	stencilStoreOp?: GPUStoreOp;
 }
@@ -533,9 +545,9 @@ interface GPURenderPassDescriptor extends GPUObjectDescriptorBase {
 
 interface GPURenderPassEncoder extends GPUObjectBase, GPUProgrammablePassEncoder, GPURenderEncodeBase {
 	setViewport(x: number, y: number, width: number, height: number, minDepth: number, maxDepth: number): void;
-	setScissorRect(x: number, y: number, width: number, height: number): void;
+	setScissorRect(x: GPUIntegerCoordinate, y: GPUIntegerCoordinate, width: GPUIntegerCoordinate, height: GPUIntegerCoordinate): void;
 	setBlendColor(color: GPUColor): void;
-	setStencilReference(reference: number): void;
+	setStencilReference(reference: GPUStencilValue): void;
 
 	executeBundles(bundles: GPURenderBundle[]): void;
 	endPass(): void;
@@ -551,9 +563,9 @@ interface GPUCommandEncoder extends GPUObjectBase {
 	beginComputePass(descriptor: GPUComputePassDescriptor): GPUComputePassEncoder;
 
 	copyBufferToBuffer(
-		source: GPUBuffer, sourceOffset: GPUBufferSize,
-		desination: GPUBuffer, destinationOffset: GPUBufferSize,
-		size: GPUBufferSize
+		source: GPUBuffer, sourceOffset: GPUSize64,
+		desination: GPUBuffer, destinationOffset: GPUSize64,
+		size: GPUSize64
 	): void;
 	copyBufferToTexture(
 		source: GPUBufferCopyView,
@@ -591,7 +603,7 @@ interface GPURenderBundle extends GPUObjectBase {
 interface GPURenderBundleEncoderDescriptor extends GPUObjectDescriptorBase {
 	colorFormats: GPUTextureFormat[];
 	depthStencilFormat?: GPUTextureFormat;
-	sampleCount?: number;
+	sampleCount?: GPUSize32;
 }
 
 interface GPURenderBundleEncoder extends GPUObjectBase, GPUProgrammablePassEncoder, GPURenderEncodeBase {
@@ -603,7 +615,7 @@ interface GPUQueue extends GPUObjectBase {
 	submit(commandBuffers: GPUCommandBuffer[]): void;
 
 	createFence(descriptor?: GPUFenceDescriptor): GPUFence;
-	signal(fence: GPUFence, signalValue: number): void;
+	signal(fence: GPUFence, signalValue: GPUFenceValue): void;
 
 	copyImageBitmapToTexture(
 		source: GPUImageBitmapCopyView,
@@ -614,12 +626,12 @@ interface GPUQueue extends GPUObjectBase {
 
 
 interface GPUFenceDescriptor extends GPUObjectDescriptorBase {
-	initialValue?: number;
+	initialValue?: GPUFenceValue;
 }
 
 interface GPUFence extends GPUObjectBase {
-	getCompletedValue(): number;
-	onCompletion(completionValue: number): Promise<void>;
+	getCompletedValue(): GPUFenceValue;
+	onCompletion(completionValue: GPUFenceValue): Promise<void>;
 }
 
 
@@ -685,14 +697,14 @@ declare const GPUUncapturedErrorEvent: GPUUncapturedErrorEventConstructor;
 type GPUExtensionName = "texture-compression-bc";
 
 interface GPULimits {
-	maxBindGroups?: number;
-	maxDynamicUniformBuffersPerPipelineLayout?: number;
-	maxDynamicStorageBuffersPerPipelineLayout?: number;
-	maxSampledTexturesPerShaderStage?: number;
-	maxSamplersPerShaderStage?: number;
-	maxStorageBuffersPerShaderStage?: number;
-	maxStorageTexturesPerShaderStage?: number;
-	maxUniformBuffersPerShaderStage?: number;
+	maxBindGroups?: GPUSize32;
+	maxDynamicUniformBuffersPerPipelineLayout?: GPUSize32;
+	maxDynamicStorageBuffersPerPipelineLayout?: GPUSize32;
+	maxSampledTexturesPerShaderStage?: GPUSize32;
+	maxSamplersPerShaderStage?: GPUSize32;
+	maxStorageBuffersPerShaderStage?: GPUSize32;
+	maxStorageTexturesPerShaderStage?: GPUSize32;
+	maxUniformBuffersPerShaderStage?: GPUSize32;
 }
 
 interface GPUDeviceDescriptor {
