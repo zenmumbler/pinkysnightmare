@@ -48,8 +48,8 @@ type GPUExtent3D = GPUIntegerCoordinate[] | {
 	depth: GPUIntegerCoordinate;
 };
 
-type GPUExtensionTextureFormat =
-	"s3tc-dxt1"; // not real, just a placeholder
+// type GPUExtensionTextureFormat =
+// 	"bc-dxt1"; // not real, just a placeholder
 
 type GPUTextureFormatNonSpec =
 	"depth32float-stencil8"; // used in WebKit as of 2020-Jan
@@ -100,7 +100,7 @@ type GPUTextureFormat =
 	"depth32float" |
 	"depth24plus" |
 	"depth24plus-stencil8" |
-	GPUExtensionTextureFormat |
+	// GPUExtensionTextureFormat |
 	GPUTextureFormatNonSpec;
 
 
