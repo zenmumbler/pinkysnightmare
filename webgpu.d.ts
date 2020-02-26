@@ -1,6 +1,6 @@
 // WebGPU types
 // by @zenmumbler
-// Up-to-date with spec as of 2020-Feb-7
+// Up-to-date with spec as of 2020-Feb-21 (rev 0419bcd)
 
 // numeric type aliases
 type GPUBufferDynamicOffset = number; // uint32
