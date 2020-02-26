@@ -468,7 +468,7 @@ interface GPUImageBitmapCopyView {
 interface GPUProgrammablePassEncoder {
 	setBindGroup(index: GPUIndex32, bindGroup: GPUBindGroup, dynamicOffets?: GPUBufferDynamicOffset[]): void;
 	setBindGroup(index: GPUIndex32, bindGroup: GPUBindGroup, dynamicOffsetsData: Uint32Array,
-		dynamicOffsetsDataStart: GPUSize64, dynamicOffsetsDataLength: GPUSize64): void;
+		dynamicOffsetsDataStart: GPUSize64, dynamicOffsetsDataLength: GPUSize32): void;
 
 	pushDebugGroup(groupLabel: string): void;
 	popDebugGroup(): void;
