@@ -3,17 +3,27 @@
 // Up-to-date with spec as of 2020-Feb-21 (rev 0419bcd)
 
 // numeric type aliases
-type GPUBufferDynamicOffset = number; // uint32
-type GPUFenceValue = number; // uint64, use bigint?
-type GPUStencilValue = number; // uint32
-type GPUSampleMask = number; // uint32
-type GPUDepthBias = number; // int32 (signed)
+/** Unsigned 32-bit integer */
+type GPUBufferDynamicOffset = number;
+/** Unsigned 64-bit integer */
+type GPUFenceValue = number; // use/allow bigint?
+/** Unsigned 32-bit integer */
+type GPUStencilValue = number;
+/** Unsigned 32-bit integer */
+type GPUSampleMask = number;
+/** Signed 32-bit integer */
+type GPUDepthBias = number;
 
-type GPUSize64 = number; // uint64, use bigint?
-type GPUIntegerCoordinate = number; // uint32
-type GPUIndex32 = number; // uint32
-type GPUSize32 = number; // uint32
-type GPUSignedOffset32 = number; // int32 (signed)
+/** Unsigned 64-bit integer */
+type GPUSize64 = number; // use/allow bigint?
+/** Unsigned 32-bit integer */
+type GPUIntegerCoordinate = number;
+/** Unsigned 32-bit integer */
+type GPUIndex32 = number;
+/** Unsigned 32-bit integer */
+type GPUSize32 = number;
+/** Signed 32-bit integer */
+type GPUSignedOffset32 = number;
 
 
 interface GPUObjectDescriptorBase {
