@@ -161,16 +161,12 @@ export interface CameraDescriptor {
 
 export class Camera {
 	projectionMatrix: Matrix;
-	viewMatrix: Matrix;
 	readonly fogLimits = new Float32Array(2);
 
-	constructor(cd: CameraDescriptor, origin: Vector3, vpWidth: number, vpHeight: number) {
+	constructor(cd: CameraDescriptor, vpWidth: number, vpHeight: number) {
 		this.projectionMatrix = Matrix.perspective(cd.fovy, vpWidth / vpHeight, cd.zNear, cd.zFar);
 		this.fogLimits[0] = cd.fogNear;
 		this.fogLimits[1] = cd.fogFar;
-
-		const target = origin.add(Vector3.forward);
-		this.viewMatrix = Matrix.lookAt(origin, target, Vector3.up);
 	}
 }
 
@@ -253,7 +249,7 @@ export class Scene {
 	renderers: Entity[] = [];
 	colliders: Entity[] = [];
 	cameras: Entity[] = [];
-	curCamera: Camera | undefined;
+	curCamera: Entity | undefined;
 
 	findEntityByName(name: string): Entity | undefined {
 		for (const e of this.entities) {
@@ -277,8 +273,7 @@ export class Scene {
 				this.colliders.push(e);
 			}
 			if (ed.camera) {
-				const pos = (ed.transform) ? ed.transform.position : Vector3.zero;
-				e.camera = new Camera(ed.camera, pos, canvas.width, canvas.height);
+				e.camera = new Camera(ed.camera, canvas.width, canvas.height);
 				this.cameras.push(e);
 			}
 			if (ed.meshRenderer) {
@@ -299,7 +294,7 @@ export class Scene {
 			}
 		}
 
-		this.curCamera = this.cameras.length ? this.cameras[0].camera : undefined;
+		this.curCamera = this.cameras.length ? this.cameras[0] : undefined;
 	}
 
 	update(dt: number) {
@@ -349,7 +344,7 @@ export class Scene {
 		if (!curCamera) {
 			return;
 		}
-		const pass = renderer.createPass(curCamera.projectionMatrix, curCamera.viewMatrix, curCamera.fogLimits);
+		const pass = renderer.createPass(curCamera.camera!.projectionMatrix, curCamera.transform.modelMatrix, curCamera.camera!.fogLimits);
 
 		for (const d of this.renderers) {
 			const dd = d.meshRenderer!;

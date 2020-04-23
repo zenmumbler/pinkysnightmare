@@ -679,7 +679,7 @@ export class GameScene extends Scene {
 		];
 
 		this.createEntities(canvas, assets, entityDescs);
-		this.curCamera = this.cameras[1].camera!;
+		this.curCamera = this.cameras[1];
 	}
 
 	async load(renderer: SceneRenderer) {
@@ -735,7 +735,7 @@ export class GameScene extends Scene {
 		}
 		else if (Input.keys[13]) {
 			this.cameraIndex = 1 - this.cameraIndex;
-			this.curCamera = this.cameras[this.cameraIndex].camera!;
+			this.curCamera = this.cameras[this.cameraIndex];
 		}
 	}
 
