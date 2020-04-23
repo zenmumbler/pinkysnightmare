@@ -298,7 +298,6 @@ export class WebGPURenderer implements Renderer {
 				height: canvas.height,
 				depth: 1
 			},
-			arrayLayerCount: 1,
 			mipLevelCount: 1,
 			sampleCount: 1,
 			dimension: "2d",
@@ -381,7 +380,7 @@ export class WebGPURenderer implements Renderer {
 				if (bindGroup === undefined) {
 					bindGroup = renderer.device.createBindGroup({
 						layout: bindGroupLayout,
-						bindings: [
+						entries: [
 							{
 								binding: 0,
 								resource: { buffer: uniformBuffer, size: 16 * 4 }
@@ -446,7 +445,6 @@ export class WebGPURenderer implements Renderer {
 
 		const texture = device.createTexture({
 			size: textureSize,
-			arrayLayerCount: 1,
 			mipLevelCount: 1,
 			sampleCount: 1,
 			dimension: "2d",
@@ -459,7 +457,7 @@ export class WebGPURenderer implements Renderer {
 		const dataCopyView = {
 			buffer: textureDataBuffer,
 			offset: 0,
-			rowPitch: imageData.width * 4,
+			bytesPerRow: imageData.width * 4,
 			imageHeight: 0
 		};
 		const textureCopyView = {
@@ -521,10 +519,10 @@ export class WebGPURenderer implements Renderer {
 
 		const module = this.device.createShaderModule({
 			code: shaderScript.textContent || "",
-			isWHLSL: true
+			// isWHLSL: true
 		});
 		const bindGroupLayout = this.device.createBindGroupLayout({
-			bindings: [{
+			entries: [{
 				binding: 0,
 				visibility: GPUShaderStageFlags.VERTEX,
 				type: "uniform-buffer"
