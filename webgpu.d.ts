@@ -1,6 +1,6 @@
 // WebGPU types
 // by @zenmumbler
-// Up-to-date with spec as of 2020-Feb-21 (rev 0419bcd)
+// Up-to-date with spec as of 2020-Apr-21 (rev adfae01)
 
 // numeric type aliases
 /** Unsigned 32-bit integer */
@@ -124,6 +124,7 @@ declare const enum GPUBufferUsageFlags {
 	UNIFORM = 0x0040,
 	STORAGE = 0x0080,
 	INDIRECT = 0x0100,
+	QUERY_RESOLVE = 0x0200
 }
 
 interface GPUBufferDescriptor extends GPUObjectDescriptorBase {
@@ -153,7 +154,6 @@ declare const enum GPUTextureUsageFlags {
 
 interface GPUTextureDescriptor extends GPUObjectDescriptorBase {
 	size: GPUExtent3D;
-	arrayLayerCount?: GPUIntegerCoordinate;
 	mipLevelCount?: GPUIntegerCoordinate;
 	sampleCount?: GPUSize32;
 	dimension?: GPUTextureDimension;
@@ -221,20 +221,29 @@ declare const enum GPUShaderStageFlags {
 	COMPUTE = 0x4
 }
 
-type GPUBindingType = "uniform-buffer" | "storage-buffer" | "readonly-storage-buffer" | "sampler" | "sampled-texture" | "storage-texture";
+type GPUBindingType =
+	"uniform-buffer" |
+	"storage-buffer" |
+	"readonly-storage-buffer" |
+	"sampler" |
+	"comparison-sampler" |
+	"sampled-texture" |
+	"readonly-storage-texture" |
+	"writeonly-storage-texture";
 
-interface GPUBindGroupLayoutBinding {
+interface GPUBindGroupLayoutEntry {
 	binding: GPUIndex32;
 	visibility: GPUShaderStageFlags;
 	type: GPUBindingType;
-	textureDimension?: GPUTextureDimension;
+	viewDimension?: GPUTextureDimension;
 	textureComponentType?: GPUTextureComponentType;
+	storageTextureFormat?: GPUTextureFormat;
 	multisampled?: boolean;
 	hasDynamicOffset?: boolean;
 }
 
 interface GPUBindGroupLayoutDescriptor extends GPUObjectDescriptorBase {
-	bindings: GPUBindGroupLayoutBinding[];
+	entries: GPUBindGroupLayoutEntry[];
 }
 
 interface GPUBindGroupLayout extends GPUObjectBase {
@@ -251,14 +260,14 @@ interface GPUBufferBinding {
 
 type GPUBindingResource = GPUSampler | GPUTextureView | GPUBufferBinding;
 
-interface GPUBindGroupBinding {
+interface GPUBindGroupEntry {
 	binding: GPUIndex32;
 	resource: GPUBindingResource;
 }
 
 interface GPUBindGroupDescriptor extends GPUObjectDescriptorBase {
 	layout: GPUBindGroupLayout;
-	bindings: GPUBindGroupBinding[];
+	entries: GPUBindGroupEntry[];
 }
 
 interface GPUBindGroup extends GPUObjectBase {
@@ -278,9 +287,7 @@ interface GPUPipelineLayout extends GPUObjectBase {
 
 
 interface GPUShaderModuleDescriptor extends GPUObjectDescriptorBase {
-	code: string | Uint32Array;
-	// WebKit impl, not in spec
-	isWHLSL?: boolean;
+	code: string;
 }
 
 interface GPUShaderModule extends GPUObjectBase {
@@ -459,8 +466,8 @@ interface GPUCommandBuffer extends GPUObjectBase {
 interface GPUBufferCopyView {
 	buffer: GPUBuffer;
 	offset?: GPUSize64;
-	rowPitch?: GPUSize32;
-	imageHeight?: GPUSize32;
+	bytesPerRow: GPUSize32;
+	rowsPerImage?: GPUSize32;
 }
 
 interface GPUTextureCopyView {
@@ -498,16 +505,16 @@ interface GPUComputePassEncoder extends GPUObjectBase, GPUProgrammablePassEncode
 }
 
 
-interface GPURenderEncodeBase {
+interface GPURenderEncoderBase {
 	setPipeline(pipeline: GPURenderPipeline): void;
 
-	setIndexBuffer(buffer: GPUBuffer, offset?: GPUSize64): void;
-	setVertexBuffer(slot: GPUIndex32, buffer: GPUBuffer, offset?: GPUSize64): void;
+	setIndexBuffer(buffer: GPUBuffer, offset?: GPUSize64, size?: GPUSize64): void;
+	setVertexBuffer(slot: GPUIndex32, buffer: GPUBuffer, offset?: GPUSize64, size?: GPUSize64): void;
 	// in impl
 	setVertexBuffers(unknown: number, buffers: GPUBuffer[], offsets: GPUSize64[]): void;
 
-	draw(vertexCount: GPUSize32, instanceCount: GPUSize32, firstVertex: GPUSize32, firstInstance: GPUSize32): void;
-	drawIndexed(indexCount: GPUSize32, instanceCount: GPUSize32, firstIndex: GPUSize32, baseVertex: GPUSignedOffset32, firstInstance: GPUSize32): void;
+	draw(vertexCount: GPUSize32, instanceCount?: GPUSize32, firstVertex?: GPUSize32, firstInstance?: GPUSize32): void;
+	drawIndexed(indexCount: GPUSize32, instanceCount?: GPUSize32, firstIndex?: GPUSize32, baseVertex?: GPUSignedOffset32, firstInstance?: GPUSize32): void;
 
 	drawIndirect(indirectBuffer: GPUBuffer, indirectOffset: GPUSize64): void;
 	drawIndexedIndirect(indirectBuffer: GPUBuffer, indirectOffset: GPUSize64): void;
@@ -551,13 +558,17 @@ interface GPURenderPassDepthStencilAttachmentDescriptor {
 interface GPURenderPassDescriptor extends GPUObjectDescriptorBase {
 	colorAttachments: GPURenderPassColorAttachmentDescriptor[];
 	depthStencilAttachment?: GPURenderPassDepthStencilAttachmentDescriptor;
+	occlusionQuerySet?: GPUQuerySet;
 }
 
-interface GPURenderPassEncoder extends GPUObjectBase, GPUProgrammablePassEncoder, GPURenderEncodeBase {
+interface GPURenderPassEncoder extends GPUObjectBase, GPUProgrammablePassEncoder, GPURenderEncoderBase {
 	setViewport(x: number, y: number, width: number, height: number, minDepth: number, maxDepth: number): void;
 	setScissorRect(x: GPUIntegerCoordinate, y: GPUIntegerCoordinate, width: GPUIntegerCoordinate, height: GPUIntegerCoordinate): void;
 	setBlendColor(color: GPUColor): void;
 	setStencilReference(reference: GPUStencilValue): void;
+
+	beginOcclusionQuery(queryIndex: GPUSize32): void;
+	endOcclusionQuery(queryIndex: GPUSize32): void;
 
 	executeBundles(bundles: GPURenderBundle[]): void;
 	endPass(): void;
@@ -597,6 +608,14 @@ interface GPUCommandEncoder extends GPUObjectBase {
 	popDebugGroup(): void;
 	insertDebugMarker(markerLabel: string): void;
 
+	resolveQuerySet(
+		querySet: GPUQuerySet,
+		firstIndex: GPUSize32,
+		queryCount: GPUSize32,
+		destination: GPUBuffer,
+		destinationOffset: GPUSize64
+	): void;
+
 	finish(descriptor?: GPUCommandBufferDescriptor): GPUCommandBuffer;
 }
 
@@ -616,7 +635,7 @@ interface GPURenderBundleEncoderDescriptor extends GPUObjectDescriptorBase {
 	sampleCount?: GPUSize32;
 }
 
-interface GPURenderBundleEncoder extends GPUObjectBase, GPUProgrammablePassEncoder, GPURenderEncodeBase {
+interface GPURenderBundleEncoder extends GPUObjectBase, GPUProgrammablePassEncoder, GPURenderEncoderBase {
 	finish(descriptor?: GPURenderBundleDescriptor): GPURenderBundle;
 }
 
@@ -645,6 +664,18 @@ interface GPUFence extends GPUObjectBase {
 }
 
 
+type GPUQueryType = "occlusion";
+
+interface GPUQuerySetDescriptor extends GPUObjectDescriptorBase {
+	type: GPUQueryType;
+	count: GPUSize32;
+}
+
+interface GPUQuerySet extends GPUObjectBase {
+	destroy(): void;
+}
+
+
 interface GPUCanvasContext {
 	configureSwapChain(descriptor: GPUSwapChainDescriptor): GPUSwapChain;
 	getSwapChainPreferredFormat(device: GPUDevice): Promise<GPUTextureFormat>;
@@ -661,7 +692,7 @@ interface GPUSwapChain extends GPUObjectBase {
 }
 
 interface HTMLCanvasElement {
-    getContext(contextId: "gpu"): GPUCanvasContext | null;
+	getContext(contextId: "gpu"): GPUCanvasContext | null;
 }
 
 
@@ -744,6 +775,8 @@ interface GPUDevice extends GPUObjectBase, EventTarget {
 	createRenderPipeline(descriptor: GPURenderPipelineDescriptor): GPURenderPipeline;
 	createCommandEncoder(descriptor?: GPUCommandEncoderDescriptor): GPUCommandEncoder;
 	createRenderBundleEncoder(descriptor: GPURenderBundleEncoderDescriptor): GPURenderBundleEncoder;
+
+	createQuerySet(descriptor: GPUQuerySetDescriptor): GPUQuerySet;
 
 	// fatal errors (§20.1)
 	readonly lost: Promise<GPUDeviceLostInfo>;
