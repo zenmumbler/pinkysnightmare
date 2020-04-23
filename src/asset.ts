@@ -1,6 +1,5 @@
-import { Float } from "stardazed/core";
 import { Vector3 } from "stardazed/vector";
-import { VertexAttributeRole, allocateGeometry } from "stardazed/geometry";
+import { VertexAttributeRole, allocateGeometry, VertexAttribute } from "stardazed/geometry";
 import { RenderMesh, RenderTexture, RenderProgram } from "./render";
 import { MapData } from "./levelgen";
 
@@ -21,13 +20,13 @@ export function quickGeometry(positions: NumArray, normals: NumArray, colours: N
 	const geom = allocateGeometry({
 		vertexDescs: [
 			{
-				attrs: [
-					{ type: Float, width: 3, role: VertexAttributeRole.Position },
-					{ type: Float, width: 3, role: VertexAttributeRole.Normal },
-					{ type: Float, width: 3, role: VertexAttributeRole.Colour }
-				].concat(
+				attrs: ([
+					{ type: "float", width: 3, role: VertexAttributeRole.Position },
+					{ type: "float", width: 3, role: VertexAttributeRole.Normal },
+					{ type: "float", width: 3, role: VertexAttributeRole.Colour }
+				] as VertexAttribute[]).concat(
 					uvs ? [
-						{ type: Float, width: 2, role: VertexAttributeRole.UV }
+						{ type: "float", width: 2, role: VertexAttributeRole.UV }
 					] : []
 				),
 				valueCount: vertexCount
