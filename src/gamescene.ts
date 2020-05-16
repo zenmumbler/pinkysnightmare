@@ -31,8 +31,9 @@ class Maze extends EntityBehaviour {
 
 class TopDownCamera extends EntityBehaviour {
 	awaken() {
-		this.entity.transform.position = new Vector3(28.5, 60, 32.5);
-		this.entity.transform.lookAt(new Vector3(28.5, 0, 32.5), Vector3.forward);
+		// this.entity.transform.position = new Vector3(28.5, 60, 32.5);
+		// this.entity.transform.lookAt(new Vector3(28.5, 0, 32.5), Vector3.forward);
+		this.entity.camera!.viewMatrix = Matrix.lookAt(new Vector3(28.5, 60, 32.5), new Vector3(28.5, 0, 32.5), Vector3.forward);
 	}
 }
 
@@ -86,7 +87,7 @@ class FixedCamera extends EntityBehaviour {
 		}
 
 		// place eye at worldspace of cam and treat the viewpoint looking at the home door as a fixed camera
-		const camY = bestCam.doorCam ? 5.25 : 5;
+		const camY = bestCam.doorCam ? 5 : 5;
 		const camPos = new Vector3(bestCam.pos.x, camY, bestCam.pos.y);
 
 		if (bestCam.doorCam) {
@@ -96,8 +97,9 @@ class FixedCamera extends EntityBehaviour {
 			playerPos.y = 0.3; // player height oscillates but we don't want a wobbly camera
 		}
 
-		this.entity.transform.position = camPos;
-		this.entity.transform.lookAt(playerPos, Vector3.up);
+		// this.entity.transform.position = camPos;
+		// this.entity.transform.lookAt(playerPos, Vector3.up);
+		this.entity.camera!.viewMatrix = Matrix.lookAt(camPos, playerPos, Vector3.up);
 	}
 }
 
@@ -422,7 +424,7 @@ export class GameScene extends Scene {
 				},
 				camera: {
 					fovy: 65,
-					zNear: 0.05,
+					zNear: 0.0125,
 					zFar: 25.0,
 					fogNear: 2.0,
 					fogFar: 8.0
@@ -679,7 +681,7 @@ export class GameScene extends Scene {
 		];
 
 		this.createEntities(canvas, assets, entityDescs);
-		this.curCamera = this.cameras[1];
+		this.curCamera = this.cameras[1].camera!;
 	}
 
 	async load(renderer: SceneRenderer) {
@@ -732,10 +734,14 @@ export class GameScene extends Scene {
 			// for (const k of this.keyItems) {
 			// 	k.props.found = true;
 			// }
+			// const cam = this.curCamera?.transform;
+			// if (cam) {
+			// 	console.info(cam.position, cam.modelMatrix.getColumn(3).xyz);
+			// }
 		}
 		else if (Input.keys[13]) {
 			this.cameraIndex = 1 - this.cameraIndex;
-			this.curCamera = this.cameras[this.cameraIndex];
+			this.curCamera = this.cameras[this.cameraIndex].camera!;
 		}
 	}
 

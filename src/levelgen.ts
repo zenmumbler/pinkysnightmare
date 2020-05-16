@@ -24,7 +24,7 @@ function buildMapFromImageData(renderer: Renderer, pix: ImageData): MapData {
 	const data = pix.data, pixw = pix.width, pixh = pix.height;
 	let inuse = 0, offset = 0, gridOffset = 0;
 
-	const HEIGHT = 6.0;       // will appear inf high
+	const HEIGHT = 6.25;       // will appear inf high
 
 	const vertexes: number[] = [], normals: number[] = [], colours: number[] = [], cameras: CameraPoint[] = [], grid = [], path = [];
 
@@ -95,13 +95,13 @@ function buildMapFromImageData(renderer: Renderer, pix: ImageData): MapData {
 				if (data[offset + 1] === 255) {
 					if (posXZ.equals(doorCameraLoc)) {
 						cameras.push({
-							pos: new Vector2(x + .5, z + .1),
+							pos: new Vector2(x + .5, z + .6),
 							doorCam: true
 						});
 					}
 					else {
 						cameras.push({
-							pos: new Vector2(x + .5, z + .5),
+							pos: new Vector2(x + .5, z + 1),
 							doorCam: false
 						});
 					}
