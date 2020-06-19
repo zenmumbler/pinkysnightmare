@@ -182,8 +182,6 @@ interface GPUTextureDescriptor extends GPUObjectDescriptorBase {
 
 interface GPUTexture extends GPUObjectBase {
 	createView(descriptor?: GPUTextureViewDescriptor): GPUTextureView;
-	// in impl
-	createDefaultView(): GPUTextureView;
 	destroy(): void;
 }
 
@@ -556,8 +554,6 @@ interface GPURenderEncoderBase {
 
 	setIndexBuffer(buffer: GPUBuffer, offset?: GPUSize64, size?: GPUSize64): void;
 	setVertexBuffer(slot: GPUIndex32, buffer: GPUBuffer, offset?: GPUSize64, size?: GPUSize64): void;
-	// in impl
-	setVertexBuffers(unknown: number, buffers: GPUBuffer[], offsets: GPUSize64[]): void;
 
 	draw(vertexCount: GPUSize32, instanceCount?: GPUSize32, firstVertex?: GPUSize32, firstInstance?: GPUSize32): void;
 	drawIndexed(indexCount: GPUSize32, instanceCount?: GPUSize32, firstIndex?: GPUSize32, baseVertex?: GPUSignedOffset32, firstInstance?: GPUSize32): void;
