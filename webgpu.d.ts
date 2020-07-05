@@ -1,6 +1,6 @@
 // WebGPU types
 // by @zenmumbler
-// Up-to-date with spec as of 2020-Jun-17 (rev 7419a3a)
+// Up-to-date with spec as of 2020-Jul-05 (rev 2dade02)
 
 // numeric type aliases
 /** Unsigned 32-bit integer */
@@ -157,8 +157,6 @@ interface GPUBuffer extends GPUObjectBase {
 	unmap(): void;
 	destroy(): void;
 }
-
-type GPUMappedBuffer = [GPUBuffer, ArrayBuffer];
 
 
 type GPUTextureDimension = "1d" | "2d" | "3d";
@@ -330,7 +328,7 @@ interface GPUCompilationMessage {
 }
 
 interface GPUCompilationInfo {
-	readonly messages: GPUCompilationMessage[];
+	readonly messages: ReadonlyArray<GPUCompilationMessage>;
 }
 
 interface GPUShaderModule extends GPUObjectBase {
@@ -828,7 +826,6 @@ interface GPUDevice extends GPUObjectBase, EventTarget {
 	readonly defaultQueue: GPUQueue;
 
 	createBuffer(descriptor: GPUBufferDescriptor): GPUBuffer;
-	createBufferMapped(descriptor: GPUBufferDescriptor): GPUMappedBuffer;
 	createTexture(descriptor: GPUTextureDescriptor): GPUTexture;
 	createSampler(descriptor?: GPUSamplerDescriptor): GPUSampler;
 	createBindGroupLayout(descriptor: GPUBindGroupLayoutDescriptor): GPUBindGroupLayout;
@@ -864,11 +861,11 @@ interface GPUAdapter {
 	readonly name: string;
 	readonly extensions: ReadonlyArray<GPUExtensionName>;
 
-	requestDevice(descriptor?: GPUDeviceDescriptor): Promise<GPUDevice>;
+	requestDevice(descriptor?: GPUDeviceDescriptor): Promise<GPUDevice | null>;
 }
 
 interface GPU {
-	requestAdapter(options?: GPURequestAdapterOptions): Promise<GPUAdapter>;
+	requestAdapter(options?: GPURequestAdapterOptions): Promise<GPUAdapter | null>;
 }
 
 interface Navigator {
