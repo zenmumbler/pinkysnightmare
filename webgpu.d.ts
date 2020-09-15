@@ -405,6 +405,7 @@ type GPUCullMode = "none" | "front" | "back";
 interface GPURasterizationStateDescriptor {
 	frontFace?: GPUFrontFace;
 	cullMode?: GPUCullMode;
+	clampDepth?: boolean; // requires "depth-clamping" extension
 	depthBias?: GPUDepthBias;
 	depthBiasSlopeScale?: number;
 	depthBiasClamp?: number;
@@ -800,7 +801,8 @@ declare const GPUUncapturedErrorEvent: GPUUncapturedErrorEventConstructor;
 type GPUExtensionName =
 	"texture-compression-bc" |
 	"pipeline-statistics-query" |
-	"timestamp-query";
+	"timestamp-query" |
+	"depth-clamping";
 
 interface GPULimits {
 	maxBindGroups?: GPUSize32;
