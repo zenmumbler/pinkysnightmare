@@ -1,6 +1,6 @@
 // WebGPU types
 // by @zenmumbler
-// Up-to-date with spec as of 2020-Jul-05 (rev 2dade02)
+// Up-to-date with spec as of 2020-Sep-15 (rev b681c2a)
 
 // numeric type aliases
 /** Unsigned 32-bit integer */
@@ -58,9 +58,6 @@ type GPUExtent3D = GPUIntegerCoordinate[] | {
 	depth: GPUIntegerCoordinate;
 };
 
-type GPUTextureFormatNonSpec =
-	"depth32float-stencil8"; // used in WebKit as of 2020-Jan
-
 type GPUTextureFormat =
 	// 8-bit formats
 	"r8unorm" |
@@ -90,8 +87,9 @@ type GPUTextureFormat =
 	"bgra8unorm" |
 	"bgra8unorm-srgb" |
 	// Packed 32-bit formats
+	"rgb9e5ufloat" |
 	"rgb10a2unorm" |
-	"rg11b10float" |
+	"rg11b10ufloat" |
 	// 64-bit formats
 	"rg32uint" |
 	"rg32sint" |
@@ -104,9 +102,11 @@ type GPUTextureFormat =
 	"rgba32sint" |
 	"rgba32float" |
 	// Depth and stencil formats
-	"depth32float" |
+	"stencil8" |
+	"depth16unorm" |
 	"depth24plus" |
 	"depth24plus-stencil8" |
+	"depth32float" |
 	// BC compressed formats usable if "texture-compression-bc" is both
     // supported by the device/user agent and enabled in createDevice.
 	"bc1-rgba-unorm" |
@@ -120,11 +120,15 @@ type GPUTextureFormat =
 	"bc5-rg-unorm" |
 	"bc5-rg-snorm" |
 	"bc6h-rgb-ufloat" |
-	"bc6h-rgb-sfloat" |
+	"bc6h-rgb-float" |
 	"bc7-rgba-unorm" |
 	"bc7-rgba-unorm-srgb" |
-	GPUTextureFormatNonSpec;
 
+	/** requires "depth24unorm-stencil8" extension */
+	"depth24unorm-stencil8" |
+
+	/** requires "depth32float-stencil8" extension */
+	"depth32float-stencil8";
 
 declare const enum GPUBufferUsageFlags {
 	MAP_READ = 0x0001,
@@ -220,6 +224,7 @@ interface GPUSamplerDescriptor extends GPUObjectDescriptorBase {
 	lodMinClamp?: number;
 	lodMaxClamp?: number;
 	compare?: GPUCompareFunction;
+	maxAnisotropy?: number;
 }
 
 interface GPUSampler extends GPUObjectBase {
@@ -228,7 +233,12 @@ interface GPUSampler extends GPUObjectBase {
 }
 
 
-type GPUTextureComponentType = "float" | "sint" | "uint";
+type GPUTextureComponentType =
+	"float" |
+	"sint" |
+	"uint" |
+	/** texture is used with comparison sampling only */
+	"depth-comparison";
 
 declare const enum GPUShaderStageFlags {
 	VERTEX = 0x1,
@@ -243,6 +253,7 @@ type GPUBindingType =
 	"sampler" |
 	"comparison-sampler" |
 	"sampled-texture" |
+	"multisampled-texture" |
 	"readonly-storage-texture" |
 	"writeonly-storage-texture";
 
@@ -260,7 +271,6 @@ interface GPUBindGroupLayoutEntry {
 
 	// Used for sampled texture bindings.
 	textureComponentType?: GPUTextureComponentType;
-	multisampled?: boolean;
 
 	// Used for storage texture bindings.
 	storageTextureFormat?: GPUTextureFormat;
@@ -494,14 +504,13 @@ interface GPUCommandBufferDescriptor extends GPUObjectBase {
 }
 
 interface GPUCommandBuffer extends GPUObjectBase {
-	// no properties, added branding field for TS disambiguation
-	readonly __WEBGPU_COMMANDBUFFER__?: never;
+	readonly executionTime: Promise<number>;
 }
 
 
 interface GPUTextureDataLayout {
 	offset?: GPUSize64;
-	bytesPerRow: GPUSize32;
+	bytesPerRow?: GPUSize32;
 	rowsPerImage?: GPUSize32;
 }
 
@@ -551,7 +560,7 @@ interface GPUComputePassEncoder extends GPUObjectBase, GPUProgrammablePassEncode
 interface GPURenderEncoderBase {
 	setPipeline(pipeline: GPURenderPipeline): void;
 
-	setIndexBuffer(buffer: GPUBuffer, offset?: GPUSize64, size?: GPUSize64): void;
+	setIndexBuffer(buffer: GPUBuffer, indexFormat: GPUIndexFormat, offset?: GPUSize64, size?: GPUSize64): void;
 	setVertexBuffer(slot: GPUIndex32, buffer: GPUBuffer, offset?: GPUSize64, size?: GPUSize64): void;
 
 	draw(vertexCount: GPUSize32, instanceCount?: GPUSize32, firstVertex?: GPUSize32, firstInstance?: GPUSize32): void;
@@ -611,7 +620,7 @@ interface GPURenderPassEncoder extends GPUObjectBase, GPUProgrammablePassEncoder
 
 
 interface GPUCommandEncoderDescriptor extends GPUObjectDescriptorBase {
-	// no properties, no need for branding
+	measureExecutionTime?: boolean;
 }
 
 interface GPUCommandEncoder extends GPUObjectBase {
@@ -686,14 +695,14 @@ interface GPUQueue extends GPUObjectBase {
 	writeBuffer(
 		buffer: GPUBuffer,
 		bufferOffset: GPUSize64,
-		data: ArrayBuffer,
+		data: BufferSource,
 		dataOffset?: GPUSize64,
 		size?: GPUSize64
 	): void;
 
 	writeTexture(
 		destination: GPUTextureCopyView,
-		data: ArrayBuffer,
+		data: BufferSource,
 		dataLayout: GPUTextureDataLayout,
 		size: GPUExtent3D
 	): void;
@@ -783,7 +792,7 @@ declare const GPUValidationError: GPUValidationErrorConstructor;
 
 type GPUError = GPUOutOfMemoryError | GPUValidationError;
 
-type GPUErrorFilter = "none" | "out-of-memory" | "validation";
+type GPUErrorFilter = "out-of-memory" | "validation";
 
 
 interface GPUUncapturedErrorEvent extends Event {
@@ -799,10 +808,12 @@ declare const GPUUncapturedErrorEvent: GPUUncapturedErrorEventConstructor;
 
 
 type GPUExtensionName =
-	"texture-compression-bc" |
+	"depth-clamping" |
+	"depth24unorm-stencil8" |
+	"depth32float-stencil8" |
 	"pipeline-statistics-query" |
-	"timestamp-query" |
-	"depth-clamping";
+	"texture-compression-bc" |
+	"timestamp-query";
 
 interface GPULimits {
 	maxBindGroups?: GPUSize32;
@@ -836,6 +847,9 @@ interface GPUDevice extends GPUObjectBase, EventTarget {
 	createShaderModule(descriptor: GPUShaderModuleDescriptor): GPUShaderModule;
 	createComputePipeline(descriptor: GPUComputePipelineDescriptor): GPUComputePipeline;
 	createRenderPipeline(descriptor: GPURenderPipelineDescriptor): GPURenderPipeline;
+	createReadyComputePipeline(descriptor: GPUComputePipelineDescriptor): Promise<GPUComputePipeline>;
+	createReadyRenderPipeline(descriptor: GPURenderPipelineDescriptor): Promise<GPURenderPipeline>;
+
 	createCommandEncoder(descriptor?: GPUCommandEncoderDescriptor): GPUCommandEncoder;
 	createRenderBundleEncoder(descriptor: GPURenderBundleEncoderDescriptor): GPURenderBundleEncoder;
 
